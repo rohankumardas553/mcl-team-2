@@ -314,7 +314,7 @@
   function ratio(part, whole) { return whole ? part / whole * 100 : null; }
   function byLabel(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
   function signed(v, dp) { return (v > 0 ? "+" : v < 0 ? "-" : "") + (dp ? one(Math.abs(v)) : num(Math.abs(v))); }
-  function pctSigned(p) { return (p > 0 ? "+" : p < 0 ? "-" : "") + Math.abs(p).toFixed(1) + "%"; }
+  function pctSigned(p) { var t = Math.abs(p).toFixed(1); return (t === "0.0" ? "" : p > 0 ? "+" : "-") + t + "%"; }
 
   // Joins the current and previous list on a key. make(c, p) builds the row (either may be null).
   function pairUp(curList, prevList, keyOf, make) {
@@ -332,82 +332,94 @@
   }
   function seen(row) { return row.curCount > 0 || row.prevCount > 0; }
 
-  function statements(cmp) {
-    var NONE = "Not enough comparable historical data for period-over-period analysis.";
-    if (!cmp.hasBoth) return [NONE];
-    var per = "the previous " + cmp.days + "-day period";
-    var cands = [];
-    function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
-    function tied(list, value) { return list.length ? tiedTop(list, value) : []; }
+  // Natural wording for the comparison statements. Numbers and choices come from the calculations;
+  // only the sentences are built here. The comparison period is named once, above the list
+  // (see periodPhrase), so each sentence does not repeat it.
+  function periodPhrase(days) { return days === 1 ? "the previous day" : "the previous " + days + "-day period"; }
+  function categoryIssues(cat) { return cat + " issues"; }
+  function joinNames(names) {                          // "A", "A and B", "A, B and C", "A, B, C and 2 more"
+    var n = names.length;
+    if (n <= 1) return names.join("");
+    if (n === 2) return names[0] + " and " + names[1];
+    if (n === 3) return names[0] + ", " + names[1] + " and " + names[2];
+    return names.slice(0, 3).join(", ") + " and " + (n - 3) + " more";
+  }
+  function moved(abs) { return abs > 0 ? "increased" : "decreased"; }
 
-    // 1. Total impact minutes.
+  function statements(cmp) {
+    if (!cmp.hasBoth) {
+      return [{ all: "Period-over-period statements are not available for All time.",
+                "no-previous": "No previous-period data is available for comparison.",
+                "no-current": "No exceptions in the selected period.",
+                empty: "No exceptions in the selected period or the previous period." }[cmp.status] ||
+              "Not enough data in both periods to make a comparison."];
+    }
+    var cands = [];
+    function tied(list, value) { return list.length ? tiedTop(list, value) : []; }
+    function combo(x) { return categoryIssues(x.category) + " at " + x.location; }
+
+    // 1. Total recorded impact minutes.
     var ti = cmp.kpis.impact;
     if (ti.dir && ti.dir !== "No change") {
-      cands.push("Total impact minutes " + (ti.abs > 0 ? "increased" : "decreased") + " from " + num(ti.prev) + " to " + num(ti.cur) +
-        " compared with " + per + " (" + signed(ti.abs, 0) + " minutes" + (ti.pct !== null ? ", " + pctSigned(ti.pct) : "") + ").");
+      cands.push("Total recorded impact minutes " + moved(ti.abs) + " from " + num(ti.prev) + " to " + num(ti.cur) +
+        " (" + signed(ti.abs, 0) + " minutes" + (ti.pct !== null ? ", " + pctSigned(ti.pct) : "") + ").");
     }
-    // 2 and 3. Category and location combinations with the largest increase and decrease in impact.
-    var up = cmp.hotspotsUpAll, down = cmp.hotspotsDownAll;
-    var tu = tied(up, function (x) { return x.impact.abs; });
+    // 2 and 3. Category and location combination with the largest increase and decrease in impact.
+    var tu = tied(cmp.hotspotsUpAll, function (x) { return x.impact.abs; });
     if (tu.length === 1) {
-      cands.push(tu[0].category + " at " + tu[0].location + " increased from " + num(tu[0].prevMinutes) + " to " + num(tu[0].curMinutes) +
-        " impact minutes compared with " + per + ".");
+      cands.push("Impact minutes for " + combo(tu[0]) + " increased from " + num(tu[0].prevMinutes) + " to " + num(tu[0].curMinutes) + ".");
     } else if (tu.length > 1) {
-      cands.push(tu.length + " category and location combinations share the largest increase in impact minutes (" + signed(tu[0].impact.abs, 0) +
-        " minutes each): " + nameList(tu.map(function (x) { return x.category + " at " + x.location; })) + ".");
+      cands.push(tu.length + " category and location combinations share the largest increase in impact minutes, " +
+        signed(tu[0].impact.abs, 0) + " minutes each: " + joinNames(tu.map(combo)) + ".");
     }
-    var td_ = tied(down, function (x) { return x.impact.abs; });
+    var td_ = tied(cmp.hotspotsDownAll, function (x) { return x.impact.abs; });
     if (td_.length === 1) {
-      cands.push(td_[0].category + " at " + td_[0].location + " decreased from " + num(td_[0].prevMinutes) + " to " + num(td_[0].curMinutes) +
-        " impact minutes compared with " + per + ".");
+      cands.push("Impact minutes for " + combo(td_[0]) + " decreased from " + num(td_[0].prevMinutes) + " to " + num(td_[0].curMinutes) + ".");
     } else if (td_.length > 1) {
-      cands.push(td_.length + " category and location combinations share the largest decrease in impact minutes (" + signed(td_[0].impact.abs, 0) +
-        " minutes each): " + nameList(td_.map(function (x) { return x.category + " at " + x.location; })) + ".");
+      cands.push(td_.length + " category and location combinations share the largest decrease in impact minutes, " +
+        signed(td_[0].impact.abs, 0) + " minutes each: " + joinNames(td_.map(combo)) + ".");
     }
-    // 4. Recurring issue type with the largest increase in number of exceptions.
-    var iu = cmp.issuesUpAll;
-    var ts = tied(iu, function (x) { return x.count.abs + "|" + x.impact.abs; });
+    // 4. Issue type with the largest increase in number of exceptions. The stored issue type is quoted as it is,
+    //    with its category, because names such as "Other" or "Weather" exist in more than one category.
+    function issueSubject(x) { return "Exceptions logged as \u201c" + x.issue + "\u201d in the " + x.category + " category"; }
+    var ts = tied(cmp.issuesUpAll, function (x) { return x.count.abs + "|" + x.impact.abs; });
     if (ts.length === 1) {
-      cands.push(ts[0].issue + " (" + ts[0].category + ") increased from " + ts[0].prevCount + " to " + plural(ts[0].curCount, "exception") +
-        " compared with " + per + ".");
+      cands.push(issueSubject(ts[0]) + " increased from " + ts[0].prevCount + " to " + ts[0].curCount + ".");
     } else if (ts.length > 1) {
-      cands.push(ts.length + " recurring issue types share the largest increase in exceptions (" + signed(ts[0].count.abs, 0) + " each): " +
-        nameList(ts.map(function (x) { return x.issue + " (" + x.category + ")"; })) + ".");
+      cands.push(ts.length + " issue types share the largest increase in exceptions, " + signed(ts[0].count.abs, 0) + " each: " +
+        joinNames(ts.map(function (x) { return "\u201c" + x.issue + "\u201d (" + x.category + ")"; })) + ".");
     }
-    // 5. Average time to start.
+    // 5. Average time from reporting to start of work.
     function timeFact(name, d) {
       if (d.dir && d.dir !== "No change") {
-        return name + " " + (d.abs > 0 ? "increased" : "decreased") + " from " + one(d.prev) + " to " + one(d.cur) +
-          " minutes compared with " + per + ".";
+        return name + " " + moved(d.abs) + " from " + one(d.prev) + " to " + one(d.cur) + " minutes.";
       }
       return null;
     }
-    var tstart = timeFact("Average time to start", cmp.perf.avgStart);
+    var tstart = timeFact("Average time from reporting to start of work", cmp.perf.avgStart);
     if (tstart) cands.push(tstart);
     // Fillers, used only when fewer than 5 statements exist above.
-    var lu = cmp.locationsUpAll;
-    var tl = tied(lu, function (x) { return x.impact.abs; });
+    var tl = tied(cmp.locationsUpAll, function (x) { return x.impact.abs; });
     if (tl.length === 1) {
-      cands.push(tl[0].name + " recorded the largest increase in impact minutes of any location: " + signed(tl[0].impact.abs, 0) + " minutes.");
+      cands.push("Among locations, " + tl[0].name + " had the largest increase in impact minutes: " + signed(tl[0].impact.abs, 0) + " minutes.");
     } else if (tl.length > 1) {
-      cands.push(tl.map(function (x) { return x.name; }).join(" and ") + " share the largest increase in impact minutes of any location (" +
-        signed(tl[0].impact.abs, 0) + " minutes each).");
+      cands.push("Among locations, " + joinNames(tl.map(function (x) { return x.name; })) + " share the largest increase in impact minutes: " +
+        signed(tl[0].impact.abs, 0) + " minutes each.");
     }
-    var cd = cmp.categoriesDownAll;
-    var tc = tied(cd, function (x) { return x.impact.abs; });
+    var tc = tied(cmp.categoriesDownAll, function (x) { return x.impact.abs; });
     if (tc.length === 1) {
-      cands.push(tc[0].name + " impact decreased by " + num(-tc[0].impact.abs) + " minutes compared with " + per + ".");
+      cands.push("Among categories, " + tc[0].name + " had the largest decrease in impact minutes: " + signed(tc[0].impact.abs, 0) + " minutes.");
     } else if (tc.length > 1) {
-      cands.push(tc.map(function (x) { return x.name; }).join(" and ") + " share the largest decrease in impact minutes among categories (" +
-        signed(tc[0].impact.abs, 0) + " minutes each).");
+      cands.push("Among categories, " + joinNames(tc.map(function (x) { return x.name; })) + " share the largest decrease in impact minutes: " +
+        signed(tc[0].impact.abs, 0) + " minutes each.");
     }
-    var tres = timeFact("Average time to resolve", cmp.perf.avgResolve);
+    var tres = timeFact("Average time from reporting to resolution", cmp.perf.avgResolve);
     if (tres) cands.push(tres);
     var ro = cmp.kpis.reopened;
     if (ro.dir && ro.dir !== "No change") {
-      cands.push("Reopened exceptions " + (ro.abs > 0 ? "increased" : "decreased") + " from " + ro.prev + " to " + ro.cur + " compared with " + per + ".");
+      cands.push("Reopened exceptions " + moved(ro.abs) + " from " + ro.prev + " to " + ro.cur + ".");
     }
-    return cands.length ? cands.slice(0, 5) : [NONE];
+    return cands.length ? cands.slice(0, 5) : ["No differences were found between the two periods in the measures compared."];
   }
 
   // curRows / prevRows are for the same filters; cur / prev are compute() results for them.
@@ -506,6 +518,7 @@
       issuesUpAll: issuesUpAll, hotspotsUpAll: hotspotsUpAll, hotspotsDownAll: hotspotsDownAll
     };
     cmp.attention = statements(cmp);
+    cmp.attentionLead = "Compared with " + periodPhrase(pr.days) + ":";
     return cmp;
   }
 
@@ -608,7 +621,7 @@
       var l = locs[r.location] || (locs[r.location] = { name: r.location, minutes: 0 });
       l.minutes += m;
       var ck = r.category + " | " + r.issue_type;
-      var g = combos[ck] || (combos[ck] = { label: r.issue_type + " (" + r.category + ")", count: 0 });
+      var g = combos[ck] || (combos[ck] = { label: r.issue_type + " (" + r.category + ")", issue: r.issue_type, category: r.category, count: 0 });
       g.count += 1;
       if (r.started_at && Date.parse(r.started_at) >= Date.parse(r.created_at)) startObs.push(d);
       if (r.status === "Resolved" && r.resolved_at && Date.parse(r.resolved_at) >= Date.parse(r.created_at)) resolveObs.push(d);
@@ -622,101 +635,135 @@
     var concentrated = totalImpact > 0 && largest * 100 > G.maxSharePct * totalImpact;   // more than 50%, exact integer test
 
     // ---- exception count and impact minutes share the general thresholds on history length
+    // ---- Wording. The STATES below are decided by exactly the same conditions as before; this code only
+    //      describes them. A Ready card shows a summary and the evidence; only Limited / Not Ready cards add
+    //      the requirement that is not met. The full rules are in the "Prototype engineering thresholds" table.
+    function list(items) { return items.length ? items.join(", ").replace(/, ([^,]*)$/, " and $1") : ""; }
+    var EMPTY_TEXT = "Forecast readiness cannot be assessed because the selected filters contain no exceptions.";
+    var READY_SUMMARY = {
+      general: ["Historical coverage meets the prototype readiness requirements.",
+                "Historical coverage is below the Ready requirement.",
+                "Historical coverage does not meet the minimum prototype requirements."],
+      impact:  ["Impact data meets the prototype readiness requirements.",
+                "Impact data is below the Ready requirement.",
+                "Impact data does not meet the minimum prototype requirements."],
+      life:    ["Lifecycle coverage meets the prototype readiness requirements.",
+                "Lifecycle coverage is below the Ready requirement.",
+                "Lifecycle coverage does not meet the minimum prototype requirements."]
+    };
+    function summaryFor(kind, state) { return READY_SUMMARY[kind][state === "Ready" ? 0 : state === "Limited" ? 1 : 2]; }
+
+    // Requirements that are not met, as { have, need, unit } (history length, exceptions, active days).
     function generalLevel(count) {
       var notReady = [], limited = [];
-      if (span < G.notReadySpan) notReady.push("only " + pl(span, "calendar day") + " of history (minimum " + G.notReadySpan + ")");
-      if (count < G.notReadyCount) notReady.push("only " + pl(count, "exception") + " (minimum " + G.notReadyCount + ")");
-      if (active < G.notReadyActive) notReady.push("only " + pl(active, "distinct active day") + " (minimum " + G.notReadyActive + ")");
-      if (span < G.readySpan) limited.push(span + " of the " + G.readySpan + " calendar days required");
-      if (count < G.readyCount) limited.push(count + " of the " + G.readyCount + " exceptions required");
-      if (active < G.readyActive) limited.push(active + " of the " + G.readyActive + " distinct active days required");
+      if (span < G.notReadySpan)    notReady.push({ have: span,   need: G.notReadySpan,   unit: "calendar day" });
+      if (count < G.notReadyCount)  notReady.push({ have: count,  need: G.notReadyCount,  unit: "exception" });
+      if (active < G.notReadyActive) notReady.push({ have: active, need: G.notReadyActive, unit: "active day" });
+      if (span < G.readySpan)       limited.push({ have: span,   need: G.readySpan,   unit: "calendar day" });
+      if (count < G.readyCount)     limited.push({ have: count,  need: G.readyCount,  unit: "exception" });
+      if (active < G.readyActive)   limited.push({ have: active, need: G.readyActive, unit: "active day" });
       return { notReady: notReady, limited: limited };
     }
-    var readyLine = "Ready requires at least " + G.readySpan + " calendar days, " + G.readyCount + " exceptions and " +
-      G.readyActive + " distinct active days; fewer than " + G.notReadySpan + " days, " + G.notReadyCount + " exceptions or " +
-      G.notReadyActive + " active days is Not Ready.";
+    function minimumLines(items) { return items.map(function (i) { return "Minimum requirement: at least " + pl(i.need, i.unit) + "."; }); }
+    function readyLines(items) { return items.map(function (i) { return "Ready requires at least " + pl(i.need, i.unit) + "."; }); }
+    function needClause(state, items) {       // for the Readiness Notes
+      return (state === "Not Ready" ? "the minimum is " : "Ready needs ") +
+        list(items.map(function (i) { return pl(i.need, i.unit) + " (" + i.have + " available)"; }));
+    }
 
     // Exception Count Forecast
     var lc = generalLevel(n);
     var countState = lc.notReady.length ? "Not Ready" : lc.limited.length ? "Limited" : "Ready";
-    var countReasons = [pl(span, "calendar day") + " of history", pl(n, "exception") + " recorded", pl(active, "distinct active day"),
-      pl(weekCount, "ISO week") + " with at least one exception"];
-    countReasons.push(countState === "Not Ready" ? "Below the Not Ready line: " + lc.notReady.join("; ")
-      : countState === "Limited" ? "Below the Ready line: " + lc.limited.join("; ") : "All Ready thresholds are met");
-    countReasons.push(readyLine);
+    var countUnmet = countState === "Not Ready" ? minimumLines(lc.notReady) : countState === "Limited" ? readyLines(lc.limited) : [];
+    var countEvidence = [pl(span, "calendar day"), pl(n, "exception"), pl(active, "active day"), pl(weekCount, "week") + " represented"];
     var exceptionCount = {
       state: countState,
-      summary: countState === "Ready" ? "Ready: all prototype thresholds are met."
-        : countState + ": " + pl(span, "day") + " of history and " + pl(n, "exception") + ". Ready threshold is " + G.readySpan + " days and " + G.readyCount + " exceptions.",
-      because: countState === "Ready" ? "" : (countState === "Not Ready" ? lc.notReady : lc.limited).join("; "),
-      reasons: countReasons,
+      summary: n ? summaryFor("general", countState) : "No exceptions in the selected period.",
+      evidence: n ? countEvidence : [], unmet: n ? countUnmet : [],
+      note: countState === "Ready" ? "" : needClause(countState, countState === "Not Ready" ? lc.notReady : lc.limited),
       facts: { span: span, exceptions: n, activeDays: active, weeks: weekCount }
     };
 
     // Impact Minutes Forecast (uses the exceptions that have a recorded impact value; no single exception above 50%)
     var li = generalLevel(impactObs);
     var impState = totalImpact === 0 ? "Not Ready" : li.notReady.length ? "Not Ready" : (li.limited.length || concentrated) ? "Limited" : "Ready";
-    var impReasons = [pl(span, "calendar day") + " of history", pl(impactObs, "exception") + " with a recorded impact value",
-      "Total recorded impact: " + num(totalImpact) + " minutes"];
-    var concText;
-    if (totalImpact === 0) concText = "Total recorded impact minutes is 0";
-    else if (concentrated) concText = "One exception contributes " + pct1(sharePct) + " of total recorded impact minutes (Ready requires " + G.maxSharePct + "% or less)";
-    else concText = "The largest single exception contributes " + pct1(sharePct) + " of total recorded impact minutes (Ready requires " + G.maxSharePct + "% or less)";
-    impReasons.push("Largest single exception: " + num(largest) + " minutes. " + concText);
-    var impUnmet = [];
-    if (totalImpact === 0) impUnmet.push("total recorded impact minutes is 0");
-    (impState === "Not Ready" ? li.notReady : li.limited).forEach(function (x) { impUnmet.push(x); });
-    if (concentrated) impUnmet.push("one exception contributes " + pct1(sharePct) + " of total recorded impact minutes");
-    impReasons.push(impState === "Ready" ? "All Ready thresholds are met"
-      : (impState === "Not Ready" ? "Below the Not Ready line: " : "Below the Ready line: ") + impUnmet.join("; "));
-    impReasons.push(readyLine);
+    var impUnmet = [], impClause = [];
+    if (impState === "Not Ready") {
+      if (totalImpact === 0) { impUnmet.push("Total recorded impact is 0 minutes."); impClause.push("total recorded impact is 0 minutes"); }
+      minimumLines(li.notReady).forEach(function (x) { impUnmet.push(x); });
+      if (li.notReady.length) impClause.push(needClause("Not Ready", li.notReady));
+    } else if (impState === "Limited") {
+      readyLines(li.limited).forEach(function (x) { impUnmet.push(x); });
+      if (li.limited.length) impClause.push(needClause("Limited", li.limited));
+      if (concentrated) {
+        impUnmet.push("One exception contributes " + pct1(sharePct) + " of total recorded impact; Ready requires " + G.maxSharePct + "% or less.");
+        impClause.push("one exception contributes " + pct1(sharePct) + " of total recorded impact (Ready needs " + G.maxSharePct + "% or less)");
+      }
+    }
+    var impEvidence = [pl(span, "calendar day"), pl(impactObs, "exception") + " with a recorded impact",
+      num(totalImpact) + " total recorded impact minutes"];
+    if (totalImpact > 0) impEvidence.push("Largest single event: " + num(largest) + " minutes (" + pct1(sharePct) + " of total)");
     var impactMinutes = {
       state: impState,
-      summary: impState === "Ready" ? "Ready: all prototype thresholds are met."
-        : impState + ": " + (totalImpact === 0 ? "total recorded impact minutes is 0."
-          : concentrated && !li.limited.length && !li.notReady.length ? "one exception contributes " + pct1(sharePct) + " of total recorded impact minutes."
-          : pl(span, "day") + " of history and " + pl(impactObs, "exception") + " with a recorded impact. Ready threshold is " + G.readySpan + " days and " + G.readyCount + " exceptions."),
-      because: impState === "Ready" ? "" : impUnmet.join("; "),
-      reasons: impReasons,
+      summary: n ? summaryFor("impact", impState) : "No exceptions in the selected period.",
+      evidence: n ? impEvidence : [], unmet: n ? impUnmet : [],
+      note: impState === "Ready" ? "" : impClause.join("; "),
       facts: { span: span, observations: impactObs, totalImpact: totalImpact, largest: largest, sharePct: sharePct, concentrated: concentrated }
     };
 
-    // Time to Start / Time to Resolve (lifecycle completeness)
-    function lifecycle(obs, T, what, noun) {
+    // Time to Start / Time to Resolve (lifecycle completeness). kind = "start" | "resolution".
+    function lifecycle(obs, T, kind) {
       var k = obs.length, sp = span2(obs);
       var pc = n ? k / n * 100 : null;
       var pctOk = n > 0 && k * 100 >= T.readyPct * n;
       var state = k < T.notReadyObs ? "Not Ready" : (k >= T.readyObs && pctOk && sp >= T.readySpan) ? "Ready" : "Limited";
-      var unmet = [];
-      if (state === "Not Ready") unmet.push("only " + k + " usable " + noun + " observation" + (k === 1 ? "" : "s") + " are available (minimum " + T.notReadyObs + ")");
-      else {
-        if (k < T.readyObs) unmet.push("only " + k + " usable " + noun + " observations are available (Ready requires " + T.readyObs + ")");
-        if (!pctOk) unmet.push((pc === null ? "0.0%" : pct1(pc)) + " of exceptions have a usable " + what + " (Ready requires " + T.readyPct + "%)");
-        if (sp < T.readySpan) unmet.push(sp + " of the " + T.readySpan + " days of represented history required");
+      var obsName = "usable " + kind + " observation";
+      var unmet = [], clause = [];
+      if (state === "Not Ready") {
+        unmet.push("Minimum requirement: at least " + pl(T.notReadyObs, obsName) + ".");
+        clause.push("the minimum is " + pl(T.notReadyObs, obsName) + " (" + k + " available)");
+      } else if (state === "Limited") {
+        if (k < T.readyObs) {
+          unmet.push("Ready requires at least " + pl(T.readyObs, obsName) + ".");
+          clause.push(pl(T.readyObs, obsName) + " (" + k + " available)");
+        }
+        if (!pctOk) {
+          unmet.push("Ready requires usable " + kind + " times for at least " + T.readyPct + "% of filtered exceptions.");
+          clause.push("usable " + kind + " times for " + T.readyPct + "% of filtered exceptions (" + (pc === null ? "0.0%" : pct1(pc)) + " have one)");
+        }
+        if (sp < T.readySpan) {
+          unmet.push("Ready requires observations covering at least " + pl(T.readySpan, "calendar day") + ".");
+          clause.push("observations covering " + pl(T.readySpan, "calendar day") + " (" + sp + " covered)");
+        }
       }
-      var reasons = [pl(k, "usable " + noun + " observation"), (pc === null ? "No exceptions to compare with" : pct1(pc) + " of " + pl(n, "filtered exception") + " have a usable " + what),
-        pl(sp, "calendar day") + " of history represented by these observations"];
-      reasons.push(state === "Ready" ? "All Ready thresholds are met"
-        : (state === "Not Ready" ? "Below the Not Ready line: " : "Below the Ready line: ") + unmet.join("; "));
-      reasons.push("Ready requires at least " + T.readyObs + " usable observations, " + T.readyPct + "% of filtered exceptions and " + T.readySpan +
-        " days of represented history; fewer than " + T.notReadyObs + " usable observations is Not Ready.");
-      if (reopened > 0) reasons.push(pl(reopened, "reopened exception") + " in this data: only the current cycle of each is measured; earlier cycles are not reconstructed");
+      var evidence = [pl(k, obsName)];
+      if (pc !== null) evidence.push(pct1(pc) + " of filtered exceptions");
+      evidence.push(pl(sp, "calendar day") + " represented");
       return {
         state: state,
-        summary: state === "Ready" ? "Ready: all prototype thresholds are met." : state + ": " + pl(k, "usable " + noun + " observation") + ". Ready threshold is " + T.readyObs + ".",
-        because: state === "Ready" ? "" : unmet.join("; "),
-        reasons: reasons,
+        summary: n ? summaryFor("life", state) : "No exceptions in the selected period.",
+        evidence: n ? evidence : [], unmet: n ? unmet : [],
+        note: state === "Ready" ? "" : (clause.length ? (state === "Not Ready" ? "" : "Ready needs ") + list(clause) : ""),
         facts: { observations: k, pctOfExceptions: pc, span: sp, reopened: reopened }
       };
     }
-    var timeToStart = lifecycle(startObs, S, "start time", "start");
-    var timeToResolve = lifecycle(resolveObs, RS, "resolution time", "resolved");
+    var timeToStart = lifecycle(startObs, S, "start");
+    var timeToResolve = lifecycle(resolveObs, RS, "resolution");
+    [exceptionCount, impactMinutes, timeToStart, timeToResolve].forEach(function (m) { m.reasons = m.evidence.concat(m.unmet); });
 
     // ---- overall
     var overall = (countState === "Ready" && impState === "Ready") ? "Ready"
       : (countState === "Not Ready" || impState === "Not Ready") ? "Not Ready" : "Limited";
-    var overallReasons = ["Exception Count Forecast: " + countState, "Impact Minutes Forecast: " + impState,
-      "Overall is Ready only when both are Ready, and Not Ready when either is Not Ready; otherwise Limited. Time-to-start and time-to-resolve have their own readiness and do not change the overall state. Each forecast type needs its own Ready state."];
+    var overallSummary = !n ? EMPTY_TEXT
+      : overall === "Ready" ? "Exception Count and Impact Minutes both meet the prototype readiness requirements."
+      : countState === impState ? "Exception Count and Impact Minutes are both " + countState + "."
+      : "Exception Count is " + countState + " and Impact Minutes is " + impState + ".";
+    var overallNote = "Time-to-Start and Time-to-Resolve are assessed separately and do not determine the overall state.";
+    var overallReasons = [overallSummary, overallNote];
+    var lifecycleNote = reopened > 0
+      ? "Lifecycle note: " + (reopened === 1 ? "1 reopened exception is included." : reopened + " reopened exceptions are included.") +
+        " Readiness uses each exception’s current lifecycle fields; earlier cycles are not reconstructed."
+      : "";
 
     // ---- coverage, concentration, recurrence
     var coverage = { earliest: first, latest: last, span: span, total: n, activeDays: active, weeks: weekCount, months: monthCount,
@@ -739,7 +786,7 @@
       largestImpact: n ? largest : null, largestSharePct: sharePct,
       topCategory: tc ? { name: tc.item.name, sharePct: tc.item.minutes / totalImpact * 100, tied: tc.tied } : null,
       topLocation: tl ? { name: tl.item.name, sharePct: tl.item.minutes / totalImpact * 100, tied: tl.tied } : null,
-      topIssue: ti ? { label: ti.item.label, sharePct: ti.item.count / n * 100, tied: ti.tied } : null
+      topIssue: ti ? { label: ti.item.label, issue: ti.item.issue, category: ti.item.category, sharePct: ti.item.count / n * 100, tied: ti.tied } : null
     };
     var order = CATEGORIES.concat(Object.keys(cats).filter(function (k) { return CATEGORIES.indexOf(k) < 0; }).sort());
     var recurrence = {
@@ -754,15 +801,23 @@
     };
 
     // ---- notes (facts about the data only)
-    var notes = [n ? "The filtered dataset contains " + pl(n, "exception") + " across " + pl(span, "calendar day") + "." : "The filtered dataset contains no exceptions."];
-    [["Exception-count", exceptionCount], ["Impact-minutes", impactMinutes], ["Time-to-start", timeToStart], ["Time-to-resolve", timeToResolve]].forEach(function (m) {
-      notes.push(m[1].state === "Ready" ? m[0] + " forecasting meets the prototype readiness thresholds."
-        : m[0] + " forecasting is " + m[1].state + " because " + m[1].because + ".");
-    });
+    var notes = [];
+    if (!n) {
+      notes.push(EMPTY_TEXT);
+    } else {
+      notes.push("The filtered data contains " + pl(n, "exception") + " across " + pl(span, "calendar day") + ".");
+      var named = [["Exception Count", exceptionCount], ["Impact Minutes", impactMinutes], ["Time-to-Start", timeToStart], ["Time-to-Resolve", timeToResolve]];
+      var okNames = named.filter(function (m) { return m[1].state === "Ready"; }).map(function (m) { return m[0]; });
+      if (okNames.length === 4) notes.push("All four forecast types meet the prototype readiness requirements.");
+      else if (okNames.length) notes.push(list(okNames) + (okNames.length === 1 ? " meets" : " meet") + " the prototype readiness requirements.");
+      named.forEach(function (m) {
+        if (m[1].state !== "Ready") notes.push(m[0] + ": " + m[1].state + ". " + (m[1].note.charAt(0).toUpperCase() + m[1].note.slice(1)) + ".");
+      });
+    }
 
     return { overall: overall, overallReasons: overallReasons, exceptionCount: exceptionCount, impactMinutes: impactMinutes,
       timeToStart: timeToStart, timeToResolve: timeToResolve, coverage: coverage, concentration: concentration,
-      recurrence: recurrence, notes: notes, thresholds: READINESS };
+      recurrence: recurrence, notes: notes, lifecycleNote: lifecycleNote, reopened: reopened, thresholds: READINESS };
   }
 
   // The gate a later forecasting phase should call: true only when that metric is "Ready".
@@ -880,7 +935,7 @@
     if (charts[id]) { charts[id].destroy(); charts[id] = null; }
     if (!hasData) {
       $(id).style.display = "none";
-      box.appendChild(el("div", "nodata", "No data for these filters."));
+      box.appendChild(el("div", "nodata", "No exceptions match the selected filters."));
       return;
     }
     $(id).style.display = "";
@@ -896,8 +951,8 @@
     var sets = [{ label: label, data: data, borderColor: color, backgroundColor: color + "22",
       fill: true, tension: 0.2, pointRadius: labels.length > 45 ? 0 : 3 }];
     if (previous) {
-      // Previous period, lined up by day number (day 1 of the previous period under day 1 of this one).
-      sets.push({ label: "Previous period (same day number)", data: previous, borderColor: GREY, backgroundColor: "transparent",
+      // Previous period, lined up day by day (day 1 of the previous period under day 1 of this one).
+      sets.push({ label: "Previous period (day by day)", data: previous, borderColor: GREY, backgroundColor: "transparent",
         borderDash: [6, 4], fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 });
     }
     return {
@@ -919,6 +974,10 @@
     };
   }
 
+  function dateTimeText(iso) {
+    var d = new Date(iso);
+    return dateText(d) + ", " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
   function td(label, text, cls) {
     var c = el("td", cls || "", text);
     c.setAttribute("data-label", label);
@@ -934,12 +993,12 @@
       tr.appendChild(td("Category", g.category));
       tr.appendChild(td("Issue Type", g.issue));
       tr.appendChild(td("Location", g.location));
-      tr.appendChild(td("Exception Count", String(g.count), "n"));
-      tr.appendChild(td("Total Impact Minutes", num(g.minutes), "n"));
-      tr.appendChild(td("Average Impact Minutes", one(g.avg), "n"));
-      tr.appendChild(td("Resolved Count", String(g.resolved), "n"));
-      tr.appendChild(td("Reopened Count", String(g.reopened), "n"));
-      tr.appendChild(td("Last Occurrence", new Date(g.last).toLocaleString([], { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })));
+      tr.appendChild(td("Exceptions", String(g.count), "n"));
+      tr.appendChild(td("Total Impact (min)", num(g.minutes), "n"));
+      tr.appendChild(td("Average Impact (min)", one(g.avg), "n"));
+      tr.appendChild(td("Resolved", String(g.resolved), "n"));
+      tr.appendChild(td("Reopened", String(g.reopened), "n"));
+      tr.appendChild(td("Latest Occurrence", dateTimeText(g.last)));
       body.appendChild(tr);
     });
     $("constraints-empty").hidden = r.constraints.length > 0;
@@ -960,7 +1019,7 @@
   }
   // The change as words: { main, note, dir }. pp = percentage points (no percentage change is shown).
   function changeParts(d, unit, dp, pp) {
-    if (d.abs === null) return { main: "Not available", note: "No data in one of the periods", dir: "" };
+    if (d.abs === null) return { main: "Change not available", note: "No data in one of the periods", dir: "" };
     if (d.abs === 0) return { main: "No change", note: "", dir: "No change" };
     var main = signed(d.abs, dp) + (unit ? " " + unit : "");
     var note = "";
@@ -975,9 +1034,8 @@
     box.textContent = "";
     var c = changeParts(d, unit, dp, pp);
     var prevUnit = pp ? "%" : unit;
-    box.appendChild(el("div", "cmp-prev", "Previous: " + valText(d.prev, prevUnit, dp)));
-    box.appendChild(el("div", "cmp-chg", "Change: " + c.main));
-    if (c.dir) box.appendChild(el("div", "cmp-dir", c.dir));
+    box.appendChild(el("div", "cmp-prev", "Previous period: " + valText(d.prev, prevUnit, dp)));
+    box.appendChild(el("div", "cmp-chg", c.dir === "No change" || !c.dir ? c.main : "Change: " + c.main + " \u00b7 " + c.dir));
     if (c.note) box.appendChild(el("div", "cmp-note", c.note));
   }
 
@@ -1001,9 +1059,10 @@
       body.appendChild(tr);
     });
     $(name + "-table").hidden = rows.length === 0;
+    $(name + "-table").parentNode.querySelectorAll("p.tblnote").forEach(function (n) { n.hidden = rows.length === 0; });
     var e = $(name + "-empty");
     e.hidden = rows.length > 0;
-    if (rows.length === 0) e.textContent = emptyText || "Nothing to show for these filters.";
+    if (rows.length === 0) e.textContent = emptyText || "No exceptions match the selected filters.";
   }
 
   function drawComparison(result) {
@@ -1029,10 +1088,10 @@
     row("Current", pr.cur.from, pr.cur.to, result.cur.total);
     row("Previous", pr.prev.from, pr.prev.to, result.prev.total);
     status.textContent = {
-      ok: "Compared with the immediately preceding period of the same length. Descriptive changes only.",
-      "no-previous": "The previous period has no exceptions for these filters. Changes are shown as absolute values only; percentage change is not available.",
-      "no-current": "The current period has no exceptions for these filters, but the previous period has.",
-      empty: "Neither period has exceptions for these filters."
+      ok: "Compared with the immediately preceding period of the same length.",
+      "no-previous": "No previous-period data is available for comparison. Changes are shown as absolute values; percentage changes are not available.",
+      "no-current": "No exceptions in the selected period. The previous period is shown for reference.",
+      empty: "No exceptions in the selected period or the previous period."
     }[cmp.status];
 
     // KPI cards
@@ -1048,20 +1107,23 @@
     function nameCells(labelName) {
       return function (x) {
         return [[labelName, x.name], ["Current Exceptions", String(x.curCount), "n"], ["Previous Exceptions", String(x.prevCount), "n"],
-          ["Exceptions Change", chgText(x.count), "n"], ["Current Impact (min)", num(x.curMinutes), "n"],
+          ["Exception Change", chgText(x.count), "n"], ["Current Impact (min)", num(x.curMinutes), "n"],
           ["Previous Impact (min)", num(x.prevMinutes), "n"], ["Impact Change (min)", chgText(x.impact), "n"],
-          ["Impact % Change", pctText(x.impact), "n"]];
+          ["Impact Change (%)", pctText(x.impact), "n"]];
       };
     }
     fillTable("cat", cmp.categories, nameCells("Category"), "No exceptions in either period.");
     fillTable("loc", cmp.locations, nameCells("Location"), "No exceptions in either period.");
 
+    var bothEmpty = cmp.status === "empty";
+    function noneText(text) { return bothEmpty ? "No exceptions in either period." : text; }
+
     // Recurring issue change
     fillTable("issue", cmp.issues, function (x) {
       return [["Category", x.category], ["Issue Type", x.issue],
-        ["Current Exceptions", String(x.curCount), "n"], ["Previous Exceptions", String(x.prevCount), "n"], ["Exceptions Change", chgText(x.count), "n"],
+        ["Current Exceptions", String(x.curCount), "n"], ["Previous Exceptions", String(x.prevCount), "n"], ["Exception Change", chgText(x.count), "n"],
         ["Current Impact (min)", num(x.curMinutes), "n"], ["Previous Impact (min)", num(x.prevMinutes), "n"], ["Impact Change (min)", chgText(x.impact), "n"]];
-    }, "No recurring issue changed between the two periods.");
+    }, noneText("No recurring issue changed between the two periods."));
 
     // Hotspot movement
     function hotCells(x) {
@@ -1069,44 +1131,44 @@
         ["Current Impact (min)", num(x.curMinutes), "n"], ["Previous Impact (min)", num(x.prevMinutes), "n"], ["Impact Change (min)", chgText(x.impact), "n"],
         ["Current Exceptions", String(x.curCount), "n"], ["Previous Exceptions", String(x.prevCount), "n"]];
     }
-    fillTable("hup", cmp.hotspotsUp, hotCells, "No combination increased in impact minutes.");
-    fillTable("hdown", cmp.hotspotsDown, hotCells, "No combination decreased in impact minutes.");
+    fillTable("hup", cmp.hotspotsUp, hotCells, noneText("No combination increased in impact minutes."));
+    fillTable("hdown", cmp.hotspotsDown, hotCells, noneText("No combination decreased in impact minutes."));
 
     // Management review candidates
     var cand = $("cand-note");
     if (!cmp.hasBoth) {
-      fillTable("cand", [], function () { return []; }, "Not enough comparable historical data for period-over-period analysis.");
+      fillTable("cand", [], function () { return []; }, "Review candidates need exceptions in both the current and the previous period.");
       cand.textContent = "";
     } else {
       fillTable("cand", cmp.candidates, function (x) {
         return [["Category", x.category], ["Issue Type", x.issue], ["Location", x.location],
-          ["Current Count", String(x.curCount), "n"], ["Previous Count", String(x.prevCount), "n"],
+          ["Current Exceptions", String(x.curCount), "n"], ["Previous Exceptions", String(x.prevCount), "n"],
           ["Current Impact (min)", num(x.curMinutes), "n"], ["Previous Impact (min)", num(x.prevMinutes), "n"],
           ["Impact Change (min)", signed(x.impactChange, 0), "n"],
           ["Current Reopened", String(x.curReopened), "n"], ["Previous Reopened", String(x.prevReopened), "n"],
-          ["Latest Occurrence", new Date(x.last).toLocaleString([], { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })]];
-      }, "No group had more impact minutes, more exceptions or more reopened exceptions than in the previous period.");
-      cand.textContent = cmp.candidateCount > 15 ? "Showing the first 15 of " + cmp.candidateCount + " candidates." : "";
+          ["Latest Occurrence", dateTimeText(x.last)]];
+      }, "No group had more impact minutes, exceptions or reopened exceptions than in the previous period.");
+      cand.textContent = cmp.candidateCount > 15 ? "Showing 15 of " + cmp.candidateCount + " candidates." : "";
     }
 
     // Response and closure comparison
     var P = cmp.perf;
     var perfRows = [
-      ["Average Time to Start", P.avgStart, "min", 1, false], ["Median Time to Start", P.medStart, "min", 1, false],
-      ["Average Time to Resolve", P.avgResolve, "min", 1, false], ["Median Time to Resolve", P.medResolve, "min", 1, false],
+      ["Average Time from Reporting to Start of Work", P.avgStart, "min", 1, false], ["Median Time from Reporting to Start of Work", P.medStart, "min", 1, false],
+      ["Average Time from Reporting to Resolution", P.avgResolve, "min", 1, false], ["Median Time from Reporting to Resolution", P.medResolve, "min", 1, false],
       ["Percentage Resolved", P.pctResolved, "percentage points", 1, true], ["Percentage Reopened", P.pctReopened, "percentage points", 1, true]
     ];
     fillTable("perf", perfRows, function (x) {
       var c = changeParts(x[1], x[2], x[3], x[4]);
       var unit = x[4] ? "%" : "min";
       return [["Measure", x[0]], ["Current", valText(x[1].cur, unit, x[3]), "n"], ["Previous", valText(x[1].prev, unit, x[3]), "n"],
-        ["Change", c.main + (c.dir && c.dir !== "No change" ? " · " + c.dir : ""), "n"]];
+        ["Change", c.main + (c.dir && c.dir !== "No change" ? " \u00b7 " + c.dir : ""), "n"]];
     });
 
     // Priority comparison
     fillTable("prio", cmp.priority, function (x) {
-      return [["Current priority", x.name], ["Current Exceptions", String(x.curCount), "n"], ["Previous Exceptions", String(x.prevCount), "n"],
-        ["Exceptions Change", chgText(x.count), "n"], ["Current Impact (min)", num(x.curMinutes), "n"],
+      return [["Current Priority", x.name], ["Current Exceptions", String(x.curCount), "n"], ["Previous Exceptions", String(x.prevCount), "n"],
+        ["Exception Change", chgText(x.count), "n"], ["Current Impact (min)", num(x.curMinutes), "n"],
         ["Previous Impact (min)", num(x.prevMinutes), "n"], ["Impact Change (min)", chgText(x.impact), "n"]];
     });
   }
@@ -1130,36 +1192,47 @@
   function drawReadiness(r) {
     var R = r.cur.readiness;
     setBadge("r-overall-badge", R.overall);
-    fillList("r-overall-reasons", R.overallReasons);
+    $("r-overall-summary").textContent = R.overallReasons[0];
+    $("r-overall-note").textContent = R.overallReasons[1];
+    $("r-overall-note").hidden = R.coverage.total === 0;
     [["count", R.exceptionCount], ["impact", R.impactMinutes], ["start", R.timeToStart], ["resolve", R.timeToResolve]].forEach(function (m) {
       setBadge("r-" + m[0] + "-badge", m[1].state);
       $("r-" + m[0] + "-sum").textContent = m[1].summary;
-      fillList("r-" + m[0] + "-reasons", m[1].reasons);
+      fillList("r-" + m[0] + "-evidence", m[1].evidence);
+      $("r-" + m[0] + "-evidence").previousElementSibling.hidden = !m[1].evidence.length;
+      fillList("r-" + m[0] + "-reasons", m[1].unmet);
+      $("r-" + m[0] + "-reasons").hidden = !m[1].unmet.length;
+      var lab = $("r-" + m[0] + "-reason-label");
+      lab.hidden = !m[1].unmet.length;
+      lab.textContent = m[1].unmet.length === 1 ? "Reason" : "Reasons";
     });
+    var ln = $("r-lifecycle-note");
+    ln.textContent = R.lifecycleNote;
+    ln.hidden = !R.lifecycleNote;
     fillList("r-notes", R.notes);
 
     var C = R.coverage, has = C.total > 0;
     var box = $("cov-cards");
     box.textContent = "";
-    statCard(box, has ? dateText(C.earliest) : "—", "Earliest exception", has ? "" : "No data");
-    statCard(box, has ? dateText(C.latest) : "—", "Latest exception", has ? "" : "No data");
-    statCard(box, String(C.span), "Calendar span (days)", "");
+    statCard(box, has ? dateText(C.earliest) : "—", "Earliest exception", has ? "" : "No exceptions in the selected period");
+    statCard(box, has ? dateText(C.latest) : "—", "Latest exception", has ? "" : "No exceptions in the selected period");
+    statCard(box, String(C.span), "Calendar span", "days, earliest to latest exception");
     statCard(box, String(C.total), "Total exceptions", "");
-    statCard(box, String(C.activeDays), "Distinct days with exceptions", "");
-    statCard(box, String(C.weeks), "Weeks represented", "ISO weeks");
-    statCard(box, String(C.months), "Months represented", "");
-    statCard(box, String(C.zeroDays), "Zero-event days", "Descriptive only");
-    statCard(box, C.perActiveDay === null ? "—" : one(C.perActiveDay), "Exceptions per active day", has ? "" : "No data");
-    statCard(box, num(C.totalImpact), "Total impact minutes", "minutes");
+    statCard(box, String(C.activeDays), "Active days", "days with at least one exception");
+    statCard(box, String(C.weeks), "Weeks represented", "weeks with at least one exception");
+    statCard(box, String(C.months), "Months represented", "calendar months with at least one exception");
+    statCard(box, String(C.zeroDays), "Zero-event days", "days in the span with no exception (descriptive)");
+    statCard(box, C.perActiveDay === null ? "—" : one(C.perActiveDay), "Exceptions per active day", has ? "average" : "No exceptions in the selected period");
+    statCard(box, num(C.totalImpact), "Total recorded impact minutes", "minutes");
 
     var K = R.concentration, cb = $("conc-cards");
     cb.textContent = "";
-    function tieText(x) { return x && x.tied ? "tied with " + x.tied + " other" + (x.tied === 1 ? "" : "s") : ""; }
-    statCard(cb, K.largestImpact === null ? "—" : num(K.largestImpact) + " min", "Largest single exception impact", K.largestImpact === null ? "No data" : "");
-    statCard(cb, K.largestSharePct === null ? "—" : pct1(K.largestSharePct), "Share of total impact from that exception", K.largestSharePct === null ? "Total impact is 0 or no data" : "");
-    statCard(cb, K.topCategory ? pct1(K.topCategory.sharePct) : "—", "Top category share of total impact", K.topCategory ? K.topCategory.name + (K.topCategory.tied ? " (" + tieText(K.topCategory) + ")" : "") : "No impact data");
-    statCard(cb, K.topLocation ? pct1(K.topLocation.sharePct) : "—", "Top location share of total impact", K.topLocation ? K.topLocation.name + (K.topLocation.tied ? " (" + tieText(K.topLocation) + ")" : "") : "No impact data");
-    statCard(cb, K.topIssue ? pct1(K.topIssue.sharePct) : "—", "Top issue type share of exceptions", K.topIssue ? K.topIssue.label + (K.topIssue.tied ? " (" + tieText(K.topIssue) + ")" : "") : "No data");
+    function tieText(x) { return x && x.tied ? " (tied with " + x.tied + " other" + (x.tied === 1 ? "" : "s") + ")" : ""; }
+    statCard(cb, K.largestImpact === null ? "—" : num(K.largestImpact) + " min", "Largest single-event impact", K.largestImpact === null ? "No exceptions in the selected period" : "");
+    statCard(cb, K.largestSharePct === null ? "—" : pct1(K.largestSharePct), "Share of total impact from largest event", K.largestSharePct === null ? "Total impact is 0 or there are no exceptions" : "");
+    statCard(cb, K.topCategory ? pct1(K.topCategory.sharePct) : "—", "Top category share of impact", K.topCategory ? K.topCategory.name + tieText(K.topCategory) : "No impact recorded");
+    statCard(cb, K.topLocation ? pct1(K.topLocation.sharePct) : "—", "Top location share of impact", K.topLocation ? K.topLocation.name + tieText(K.topLocation) : "No impact recorded");
+    statCard(cb, K.topIssue ? pct1(K.topIssue.sharePct) : "—", "Most common issue type share", K.topIssue ? K.topIssue.issue + " · " + K.topIssue.category + tieText(K.topIssue) : "No exceptions in the selected period");
 
     var body = $("rec-body");
     body.textContent = "";
@@ -1167,31 +1240,36 @@
       var tr = el("tr");
       tr.appendChild(td("Category", c.name));
       tr.appendChild(td("Exceptions", String(c.count), "n"));
-      tr.appendChild(td("Distinct Days", String(c.days), "n"));
-      tr.appendChild(td("Distinct Locations", String(c.locations), "n"));
+      tr.appendChild(td("Days with Exceptions", String(c.days), "n"));
+      tr.appendChild(td("Locations", String(c.locations), "n"));
       tr.appendChild(td("Issue Types", String(c.issueTypes), "n"));
       body.appendChild(tr);
     });
     var rb = $("rec-cards");
     rb.textContent = "";
-    statCard(rb, String(R.recurrence.once), "Category + issue type combinations occurring once", "");
-    statCard(rb, String(R.recurrence.twoToFour), "Combinations occurring 2 to 4 times", "");
-    statCard(rb, String(R.recurrence.fivePlus), "Combinations occurring 5 or more times", "");
+    statCard(rb, String(R.recurrence.once), "Seen once", "category + issue type combinations");
+    statCard(rb, String(R.recurrence.twoToFour), "Seen 2–4 times", "category + issue type combinations");
+    statCard(rb, String(R.recurrence.fivePlus), "Seen 5 or more times", "category + issue type combinations");
 
     var T = R.thresholds, G = T.general, tb = $("thr-body");
     tb.textContent = "";
-    [["Exception Count and Impact Minutes",
-      "fewer than " + G.notReadySpan + " calendar days, or fewer than " + G.notReadyCount + " exceptions, or fewer than " + G.notReadyActive + " distinct active days",
-      "at least " + G.readySpan + " calendar days, " + G.readyCount + " exceptions and " + G.readyActive + " distinct active days (Impact Minutes also needs: no single exception above " + G.maxSharePct + "% of total impact minutes, and total impact above 0)"],
-     ["Time to Start", "fewer than " + T.start.notReadyObs + " usable start observations (started_at not before created_at)",
-      "at least " + T.start.readyObs + " usable observations, " + T.start.readyPct + "% of filtered exceptions, and " + T.start.readySpan + " days of represented history"],
-     ["Time to Resolve", "fewer than " + T.resolve.notReadyObs + " usable resolved observations (Resolved, resolved_at not before created_at)",
-      "at least " + T.resolve.readyObs + " usable observations, " + T.resolve.readyPct + "% of filtered exceptions, and " + T.resolve.readySpan + " days of represented history"]
+    [["Exception Count",
+      "Fewer than " + G.notReadySpan + " calendar days, fewer than " + G.notReadyCount + " exceptions, or fewer than " + G.notReadyActive + " active days.",
+      "At least " + G.readySpan + " calendar days, at least " + G.readyCount + " exceptions, and at least " + G.readyActive + " active days."],
+     ["Impact Minutes",
+      "The Exception Count minimums are not met (counting exceptions with a recorded impact), or total recorded impact is 0.",
+      "The Exception Count Ready requirements are met (counting exceptions with a recorded impact), and no single exception contributes more than " + G.maxSharePct + "% of total recorded impact."],
+     ["Time-to-Start (reporting to start of work)",
+      "Fewer than " + T.start.notReadyObs + " usable start observations.",
+      "At least " + T.start.readyObs + " usable start observations, usable start times for at least " + T.start.readyPct + "% of filtered exceptions, and observations covering at least " + T.start.readySpan + " calendar days. A usable start observation has a start time that is not earlier than the reporting time."],
+     ["Time-to-Resolve (reporting to resolution)",
+      "Fewer than " + T.resolve.notReadyObs + " usable resolution observations.",
+      "At least " + T.resolve.readyObs + " usable resolution observations, usable resolution times for at least " + T.resolve.readyPct + "% of filtered exceptions, and observations covering at least " + T.resolve.readySpan + " calendar days. A usable resolution observation is a currently Resolved exception whose resolution time is not earlier than its reporting time."]
     ].forEach(function (row) {
       var tr = el("tr");
-      tr.appendChild(td("Measure", row[0]));
-      tr.appendChild(td("Not Ready when", row[1]));
-      tr.appendChild(td("Ready when", row[2]));
+      tr.appendChild(td("Forecast type", row[0]));
+      tr.appendChild(td("Not Ready if", row[1]));
+      tr.appendChild(td("Ready if all of these are met", row[2]));
       tb.appendChild(tr);
     });
   }
@@ -1202,23 +1280,27 @@
     // KPI cards
     setKpi("k-total", String(r.total), "");
     setKpi("k-impact", num(r.totalImpact), "minutes");
-    setKpi("k-avg", r.avgImpact === null ? "—" : one(r.avgImpact), r.avgImpact === null ? "No data" : "minutes per exception");
+    setKpi("k-avg", r.avgImpact === null ? "—" : one(r.avgImpact), r.avgImpact === null ? "No exceptions in the selected period" : "minutes per exception");
     setKpi("k-start", r.timeToStart.n ? one(r.timeToStart.avg) : "—",
-      r.timeToStart.n ? "minutes, from " + r.timeToStart.n + " started exception" + (r.timeToStart.n === 1 ? "" : "s") : "No data");
+      r.timeToStart.n ? "minutes · based on " + r.timeToStart.n + " exception" + (r.timeToStart.n === 1 ? "" : "s") + " with a start time" : "No start times recorded in the selected period");
     setKpi("k-resolve", r.timeToResolve.n ? one(r.timeToResolve.avg) : "—",
-      r.timeToResolve.n ? "minutes, from " + r.timeToResolve.n + " resolved exception" + (r.timeToResolve.n === 1 ? "" : "s") : "No data");
+      r.timeToResolve.n ? "minutes · based on " + r.timeToResolve.n + " resolved exception" + (r.timeToResolve.n === 1 ? "" : "s") : "No resolved exceptions in the selected period");
     setKpi("k-reopened", String(r.reopened), r.total ? "of " + r.total + " exceptions" : "");
 
     // Strategic management attention (period-over-period facts; the fallback text when no comparison is possible)
     var att = $("attention");
     att.textContent = "";
-    (result.cmp ? result.cmp.attention : ["Not enough comparable historical data for period-over-period analysis."])
+    var lead = $("attention-lead");
+    lead.hidden = !(result.cmp && result.cmp.hasBoth);
+    lead.textContent = lead.hidden ? "" : result.cmp.attentionLead;
+    $("attention-note").hidden = !(result.cmp && result.cmp.hasBoth);
+    (result.cmp ? result.cmp.attention : ["Period-over-period statements are not available for All time."])
       .forEach(function (t) { att.appendChild(el("li", "", t)); });
 
     // Charts
     var s = r.series;
     var per = s.mode === "day" ? "day" : "month";
-    $("t-created").textContent = "Exceptions Created Over Time (per " + per + ")";
+    $("t-created").textContent = "Exceptions Reported Over Time (per " + per + ")";
     $("t-impact").textContent = "Impact Minutes Over Time (per " + per + ")";
     var ov = result.overlay;
     var hasChartData = r.total > 0 || (ov && result.prev && result.prev.total > 0);
@@ -1232,7 +1314,7 @@
     // Hotspots
     var hs = $("hotspots");
     hs.textContent = "";
-    if (!r.hotspots.length) hs.appendChild(el("div", "empty", "No exceptions match these filters."));
+    if (!r.hotspots.length) hs.appendChild(el("div", "empty", "No exceptions match the selected filters."));
     r.hotspots.forEach(function (h, i) {
       var card = el("div", "hot");
       card.appendChild(el("span", "rank", String(i + 1)));
@@ -1247,13 +1329,13 @@
 
     // Response and closure performance
     $("p-median-start").textContent = minutesText1(r.timeToStart.median);
-    $("p-median-start-sub").textContent = r.timeToStart.n ? "from " + r.timeToStart.n + " started exception" + (r.timeToStart.n === 1 ? "" : "s") : "No data";
+    $("p-median-start-sub").textContent = r.timeToStart.n ? "based on " + r.timeToStart.n + " exception" + (r.timeToStart.n === 1 ? "" : "s") + " with a start time" : "No start times recorded in the selected period";
     $("p-median-resolve").textContent = minutesText1(r.timeToResolve.median);
-    $("p-median-resolve-sub").textContent = r.timeToResolve.n ? "from " + r.timeToResolve.n + " resolved exception" + (r.timeToResolve.n === 1 ? "" : "s") : "No data";
+    $("p-median-resolve-sub").textContent = r.timeToResolve.n ? "based on " + r.timeToResolve.n + " resolved exception" + (r.timeToResolve.n === 1 ? "" : "s") : "No resolved exceptions in the selected period";
     $("p-resolved").textContent = r.pctResolved === null ? "—" : r.pctResolved;
-    $("p-resolved-sub").textContent = r.total ? r.resolvedCount + " of " + r.total + " currently Resolved" : "No data";
+    $("p-resolved-sub").textContent = r.total ? r.resolvedCount + " of " + r.total + " exceptions are currently Resolved" : "No exceptions in the selected period";
     $("p-reopened").textContent = r.pctReopened === null ? "—" : r.pctReopened;
-    $("p-reopened-sub").textContent = r.total ? r.reopened + " of " + r.total + " reopened at least once" : "No data";
+    $("p-reopened-sub").textContent = r.total ? r.reopened + " of " + r.total + " exceptions reopened at least once" : "No exceptions in the selected period";
 
     // Priority distribution
     var pb = $("priority-body");
@@ -1262,15 +1344,15 @@
       var tr = el("tr");
       var name = p === "none" ? "Not recorded" : p;
       var cell = el("td", "", "");
-      cell.setAttribute("data-label", "Current priority");
+      cell.setAttribute("data-label", "Current Priority");
       if (p !== "none") cell.appendChild(el("span", "badge " + p, name)); else cell.textContent = name;
       tr.appendChild(cell);
       tr.appendChild(td("Exceptions", String(r.priority[p].count), "n"));
-      tr.appendChild(td("Total Impact Minutes", num(r.priority[p].minutes), "n"));
+      tr.appendChild(td("Total Impact (min)", num(r.priority[p].minutes), "n"));
       pb.appendChild(tr);
     });
     $("priority-changes").textContent = String(r.priorityChanges);
-    $("priority-changes-sub").textContent = r.total ? "of " + r.total + " exceptions have at least one priority change" : "No data";
+    $("priority-changes-sub").textContent = r.total ? "of " + r.total + " exceptions (priority changed at least once)" : "No exceptions in the selected period";
 
     drawComparison(result);
     drawReadiness(result);

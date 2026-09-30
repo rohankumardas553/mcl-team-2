@@ -265,18 +265,29 @@
   up) there is no overlay.
 - STRATEGIC MANAGEMENT ATTENTION (replaces the Phase C "Management Attention"):
   at most 5 fixed-pattern factual sentences, made only from computed values, in
-  this order, and each one only if it exists: (1) total impact minutes changed
-  from X to Y; (2) the category + location with the largest increase in impact
-  minutes; (3) the category + location with the largest decrease; (4) the
-  recurring issue type with the largest increase in number of exceptions; (5)
-  average time to start changed from X to Y minutes. Only when fewer than 5 exist
-  are these added in this order: the location with the largest increase, the
-  category with the largest decrease, average time to resolve, reopened
-  exceptions. Ties are stated as ties. No causes, no prediction, no advice, no
-  "should", no thresholds. When it is not possible (All time, or either period has
-  no exceptions): "Not enough comparable historical data for period-over-period
-  analysis." (The Phase C category-share and location facts are no longer in this
-  box; Operational Hotspots and the tables still show that information.)
+  this order, and each one only if it exists: (1) total recorded impact minutes
+  changed from X to Y; (2) the category + location with the largest increase in
+  impact minutes; (3) the category + location with the largest decrease; (4) the
+  issue type with the largest increase in number of exceptions; (5) average time
+  from reporting to start of work changed from X to Y minutes. Only when fewer
+  than 5 exist are these added in this order: the location with the largest
+  increase, the category with the largest decrease, average time from reporting
+  to resolution, reopened exceptions. Ties are stated as ties. The comparison
+  period is named ONCE, in the line above the list ("Compared with the previous
+  90-day period:"), not in every sentence. Sentences read like "Impact minutes for
+  Haul Road issues at Haul Road B increased from 858 to 2,375." and "Exceptions
+  logged as "Slippery road" in the Haul Road category increased from 7 to 19."
+  (the stored issue type is quoted as it is, with its category, because names such
+  as "Other" or "Weather" exist in more than one category). No causes, no
+  prediction, no advice, no "should", no thresholds. Short disclaimer under the
+  list: "Facts calculated from the current and previous periods. No prediction,
+  inferred cause or recommendation." When a comparison is not possible the list
+  says why in one sentence: "Period-over-period statements are not available for
+  All time.", "No previous-period data is available for comparison.", "No
+  exceptions in the selected period." or "No exceptions in the selected period or
+  the previous period." (The Phase C category-share and location facts are no
+  longer in this box; Operational Hotspots and the tables still show that
+  information.)
 - MANAGEMENT REVIEW CANDIDATES: NOT a recommendation engine, no score, no colour
   rank. Grouped by category + issue type + location. A group is listed when its
   current impact minutes, OR current number of exceptions, OR current reopened
@@ -359,6 +370,30 @@
   lifecycle cards say so when reopened exceptions are present.
 - NOT YET (later phases only, when asked): forecasting itself, confidence ranges,
   anomaly detection, AI or LLM recommendations, automated decisions.
+
+## Wording conventions on the Analytics page (presentation only)
+- Audience: a management presentation. Sentences must read naturally, say each
+  thing once, and never sound like program output. This is wording only: the
+  numbers, sort orders, thresholds, states and permissions are not affected.
+- Terms used everywhere (cards, tables, sentences, notes): "time from reporting
+  to start of work" and "time from reporting to resolution" (readiness cards keep
+  the names Time-to-Start and Time-to-Resolve); "usable start observations" and
+  "usable resolution observations"; "total recorded impact minutes" in prose;
+  "active day" (a day with at least one exception); "reported" for the date an
+  exception was created. Technical words such as "distinct" and "ISO week" are
+  not used in the readiness cards (the coverage note explains that weeks run
+  Monday to Sunday).
+- Readiness cards: a state badge, one summary sentence, a short Evidence list, and
+  a Reason list ONLY when the card is Limited or Not Ready (only the requirements
+  that are not met; Not Ready lists only the failed minimum requirements). Ready
+  cards do not repeat any threshold text. The full rules are in the expandable
+  "Prototype engineering thresholds" table. Reopened exceptions are mentioned once,
+  in a single "Lifecycle note" under the four cards (it stays visible whenever
+  reopened exceptions are included; the thresholds table explains that earlier
+  cycles are not reconstructed).
+- A change that rounds to zero is shown without a sign ("0.0%", never "-0.0%").
+  Dates and times read "26 Sep 2026, 00:35". Numbers never show NaN, Infinity,
+  undefined or null; unavailable values show a dash or a plain sentence.
 
 ## Final lockdown (07-lockdown.sql)
 - WHEN: run it ONLY after the login pages are live on the main branch (Vercel
@@ -454,3 +489,4 @@
 - Phase C analytics (Claude): new analytics.html and analytics.js (historical analytics for Shift In-Charge, Manager, Project Officer and General Manager; the Overman gets no menu link and a "Not authorised" message on a manual visit), one line in auth.js to add the Analytics menu item for the "view_analytics" permission, and this CLAUDE.md section. Filters (date range, shift, category, location), 6 KPI cards, rule-based Management Attention, 6 charts, Operational Hotspots, Recurring Operational Constraints table, Response and Closure Performance, Priority Distribution and Priority Changes. Read-only, client-side aggregation of rows the person may already read; NO new SQL, no new grant, no change to the lockdown, maker-checker, reopen authority or priority rules. Known limitation: multiple lifecycle cycles are not added up. No forecasting and no AI recommendations yet. Tested against a scratch local Postgres copy with 2,326 demo rows over about 13 months; not tested on the live Supabase.
 - Phase D period comparison (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). Compares the selected period with the immediately preceding period of the same length (custom ranges too; not for All time): Period Comparison banner, comparison lines on the 6 KPI cards, Strategic Management Attention (up to 5 factual sentences), Category Change, Location Change, Recurring Issue Change, Hotspot Movement (increases and decreases), Management Review Candidates (factual list, not recommendations), Response & Closure comparison (percentage points), Priority comparison and Priority Changes, dashed previous-period line on the trend charts (periods up to 90 days). Read-only; one bulk read covers both periods. No forecasting and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not added up. Tested against a scratch local Postgres copy with 2,326 demo rows; not tested on the live Supabase.
 - Phase E forecast readiness (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no function, no extra database request, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). New "Forecast Readiness" section: Not Ready / Limited / Ready for Exception Count, Impact Minutes, Time-to-Start and Time-to-Resolve forecasts, each with written factual reasons, plus an overall state, Readiness Notes, Historical Coverage, Data Concentration and Recurrence Coverage. Prototype engineering thresholds (data sufficiency, not operational or statistical) are shown on the page and listed above. Ready does not mean statistically validated, accurate or reliable. Reusable gate for a later phase: MineAnalytics.assessReadiness and isReady. NO forecasting, no scores and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not reconstructed. Tested against a scratch local Postgres copy with 2,326 demo rows and hand-built boundary datasets; not tested on the live Supabase.
+- Analytics language and readability pass (Claude): wording and layout of the text on analytics.html only (analytics.js and analytics.html). No calculation, sort order, threshold, readiness state, filter, query, permission, SQL or other page changed. Natural comparison sentences (period named once above the list), one set of terms for the time measures, shorter readiness cards (evidence plus a reason only when Limited or Not Ready), one shared lifecycle note, clearer overall readiness text, consistent labels in Historical Coverage, Data Concentration and Recurrence Coverage, grammatical threshold text, plain empty and no-comparison messages, consistent dates and numbers. Tested on the fictional presentation data in a scratch copy; not tested on the live Supabase.
