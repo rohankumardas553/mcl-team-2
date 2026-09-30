@@ -4,7 +4,7 @@
 --   * nothing is dropped, deleted or overwritten
 --   * existing shift_exceptions rows are kept exactly as they are
 --   * only NEW empty columns are added and (for old rows) filled from urgency
---   * the old open access rules are NOT changed here (that is 06-lockdown.sql, later),
+--   * the old open access rules are NOT changed here (that is 07-lockdown.sql, later),
 --     so the live website keeps working exactly as before after you run this.
 --
 -- Run this whole file in the Supabase SQL Editor, in one go.
@@ -235,7 +235,7 @@ begin
   end if;
 
   if current_user = 'anon' then
-    -- Until 06-lockdown.sql the old website may still change status / resolved_at.
+    -- Until 07-lockdown.sql the old website may still change status / resolved_at.
     -- Everything else is fixed for good.
     if NEW.id                       is distinct from OLD.id
     or NEW.created_at               is distinct from OLD.created_at
@@ -277,7 +277,7 @@ begin
 end
 $$;
 
--- Audit lines for changes that did NOT go through the functions (before 06-lockdown).
+-- Audit lines for changes that did NOT go through the functions (before 07-lockdown).
 create or replace function public.exceptions_audit_direct()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 begin
@@ -424,6 +424,7 @@ end
 $$;
 
 -- DECLINE CLOSURE: Shift In-Charge, Manager only when can_operate. Reason required.
+-- Maker-checker: the person who requested the closure can never decline it themselves.
 create or replace function public.decline_closure(p_id uuid, p_reason text)
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_a public.profiles := public.app_actor(); v_e public.shift_exceptions;
@@ -437,6 +438,8 @@ begin
   if not found then raise exception 'Exception not found.'; end if;
   if v_e.status <> 'In progress' or v_e.closure_requested_at is null then
     raise exception 'There is no closure request to decline on this exception.'; end if;
+  if v_e.closure_requested_by = v_a.user_id then
+    raise exception '%', 'You cannot confirm or decline your own closure request. Another Shift In-Charge or authorised Manager must review it.'; end if;
   update public.shift_exceptions
      set closure_requested_by = null, closure_requested_by_name = null, closure_requested_at = null
    where id = p_id;
@@ -449,6 +452,7 @@ $$;
 
 -- RESOLVE: Shift In-Charge, Manager only when can_operate. In progress only.
 -- A note (5+ characters) is required unless a closure request already exists.
+-- Maker-checker: the person who requested the closure can never confirm it themselves.
 create or replace function public.resolve_exception(p_id uuid, p_note text default null)
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_a public.profiles := public.app_actor(); v_e public.shift_exceptions; v_note text := nullif(btrim(coalesce(p_note, '')), '');
@@ -462,6 +466,8 @@ begin
   if v_e.status <> 'In progress' then
     raise exception 'Only an In progress exception can be resolved (this one is %). An Open one must be started first.',
       v_e.status; end if;
+  if v_e.closure_requested_at is not null and v_e.closure_requested_by = v_a.user_id then
+    raise exception '%', 'You cannot confirm or decline your own closure request. Another Shift In-Charge or authorised Manager must review it.'; end if;
   if v_e.closure_requested_at is null and (v_note is null or char_length(v_note) < 5) then
     raise exception 'There is no closure request, so please write a resolution note of at least 5 characters.'; end if;
   if v_note is not null and char_length(v_note) < 5 then
@@ -576,7 +582,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------
--- 7. Who may READ what (added next to the old rules; the old open rules stay until 06)
+-- 7. Who may READ what (added next to the old rules; the old open rules stay until 07)
 -- ---------------------------------------------------------------------------
 -- These four policies are ours. They are dropped and re-created so a re-run always keeps
 -- them current. (The old open policies on shift_exceptions are NOT touched here.)

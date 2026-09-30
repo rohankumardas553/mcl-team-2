@@ -112,6 +112,8 @@
     .act.danger:hover { background: #fee2e2; }
     .act:disabled { opacity: .55; cursor: not-allowed; }
     .act:focus-visible, .formbox button:focus-visible, summary:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+    .await-note { flex: 1 1 100%; padding: 10px 12px; border-radius: 10px; background: #fff7ed; color: #9a3412;
+                  border: 2px dashed #f59e0b; font-size: 15px; font-weight: 700; }
     .lock-note { margin-top: 6px; font-size: 14px; color: #7f1d1d; }
     .formbox { margin-top: 10px; padding: 12px; border: 2px dashed var(--navy); border-radius: 12px; background: #f8fafd; }
     .formbox h3 { margin: 0 0 8px; font-size: 16px; }
@@ -265,7 +267,7 @@
     var COLS = "id,created_at,shift,location,category,issue_type,description,impact_minutes,status," +
       "reported_priority,current_priority,created_by,created_by_name,created_by_role," +
       "priority_changed_by_name,priority_changed_by_role,priority_changed_at,priority_change_reason," +
-      "started_by_name,started_at,closure_requested_by_name,closure_requested_at," +
+      "started_by_name,started_at,closure_requested_by,closure_requested_by_name,closure_requested_at," +
       "resolved_by_name,resolved_at";
 
     var access = null, myId = null;
@@ -281,6 +283,8 @@
              (Date.now() - new Date(r.created_at).getTime()) > 30 * 60 * 1000;
     }
     function closurePending(r) { return r.status === "In progress" && !!r.closure_requested_at; }
+    // Maker-checker: the person who asked for the closure cannot confirm or decline it.
+    function isMyClosureRequest(r) { return closurePending(r) && r.closure_requested_by === myId; }
 
     // ---------------------------------------------------------------- data
     async function loadAll() {
@@ -608,14 +612,17 @@
             args: function (body) { return { p_id: r.id, p_note: body }; } });
         });
       }
-      if (r.status === "In progress" && pending && can("decline_closure")) {
+      if (isMyClosureRequest(r)) {
+        box.appendChild(el("div", "await-note", "Awaiting confirmation by another authorised officer."));
+      }
+      if (r.status === "In progress" && pending && !isMyClosureRequest(r) && can("decline_closure")) {
         add("Decline closure", "danger", function () {
           openForm(item, { title: "Decline the closure request", fn: "decline_closure", ok: "Closure request declined.", submit: "Decline",
             text: { label: "Reason for declining", min: 5 },
             args: function (body) { return { p_id: r.id, p_reason: body }; } });
         });
       }
-      if (r.status === "In progress" && can("resolve")) {
+      if (r.status === "In progress" && can("resolve") && !isMyClosureRequest(r)) {
         if (pending) {
           add("Confirm Resolved", "", function (b) {
             doRpc(item, b, "resolve_exception", { p_id: r.id, p_note: null }, "Resolved.");
