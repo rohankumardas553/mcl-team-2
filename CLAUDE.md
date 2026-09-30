@@ -61,7 +61,8 @@
   folder: 01-setup.sql, then 02-..., 03-..., 04-... for later changes.
   Order so far: 01, 02, 03 (demo data), 04 (auth foundation), 05 (location
   renames), 06 (closure confirmation fix, for a database that already ran 04),
-  then 07-lockdown.sql and 07-rollback.sql (not written yet).
+  then 07-lockdown.sql (final security lockdown) and 07-rollback.sql
+  (EMERGENCY ONLY - it re-opens public access). See "Final lockdown" below.
 - Tables (all in the public schema): shift_exceptions (the records),
   profiles (who each login account is and its role), exception_remarks
   (remarks) and exception_audit (history). Every table has
@@ -121,6 +122,44 @@
   manager2 (can_operate), po1, gm1 at example.com. Passwords are set by the Data
   Keeper in Supabase and are never stored in this repository.
 
+## Final lockdown (07-lockdown.sql)
+- WHEN: run it ONLY after the login pages are live on the main branch (Vercel
+  production) and every role has passed the preview tests. The old public pages
+  stop working the moment it runs. Claude never runs SQL; the Data Keeper does.
+- WHAT IT DOES: removes the old open rules on shift_exceptions ("anyone can
+  read / add / update" and any other leftover rule except "role read
+  exceptions"); takes ALL table and function access away from signed-out
+  visitors (anon); gives signed-in users SELECT only on shift_exceptions,
+  profiles, exception_remarks and exception_audit (row level security decides
+  which rows); allows signed-in users to run only the 8 action functions,
+  my_access() and app_rank() (the read rules use it); hides every internal
+  helper; keeps row level security ON for all 4 tables; adds value checks
+  (status, shift, category, priorities, impact minutes) as NOT VALID, only
+  where no old row would break them. It deletes nothing, updates no record
+  and drops no table. It runs in one transaction, checks that 04 and 06 were
+  run and that an active profile exists (so nobody is locked out), and is
+  safe to run twice.
+- AFTER IT: the browser can never insert, update or delete anything directly.
+  Every change goes through the 8 functions, so roles, the priority rank lock
+  and maker-checker keep working exactly as before.
+- CHECK IT: the last query of the file gives one result table. Section A must
+  show OK on all 9 lines; section C must show anon all false and authenticated
+  true only for select; section D must show signed-out can run = false for
+  every function.
+- 07-rollback.sql restores ONLY the old open rules and grants on
+  shift_exceptions. It is for emergencies only, keeps every table, column,
+  record, audit line, profile, role and the maker-checker rule, and does not
+  open the new tables. After an emergency, fix the cause and run
+  07-lockdown.sql again.
+- NEW WORK AFTER LOCKDOWN: every new table needs row level security and an
+  explicit revoke from anon and authenticated before use; every new function
+  must be granted to authenticated explicitly and revoked from anon and public
+  (Supabase gives anon access by default). Re-run the 07 verification query
+  after each database change.
+- MIGRATION ORDER: backup, 04, accounts, 04 again, 05, 06, test every role on
+  the preview, merge to main (pages live), 07-lockdown.sql, run the verification
+  query, run the post-lockdown role tests, keep 07-rollback.sql for emergencies.
+
 ## How to work with us
 - Make one change at a time. Do not change parts that already work unless we
   ask.
@@ -161,3 +200,4 @@
 - Login and roles, Phase A corrections (Claude): (1) create_exception now accepts the NEW location names; a separate database/05-location-renames.sql renames existing records (Coal Face A to ABC Patch, Coal Face B to XYZ Patch, Junction A to MDP Junction, Stockyard A to Stockyard 1, Siding A to Siding 1, Siding B to Siding 2; Haul Road A and B unchanged). It changes ONLY the location field, deletes nothing, leaves updated_at alone, adds one audit line per renamed record and is safe to run twice. Run it AFTER 04. 01 to 03 still use the old names, so run any of them you have not yet run BEFORE 05, and do not re-run them after 05. The old public pages still show the old names until Phase B. Future lockdown files are now 07-lockdown.sql and 07-rollback.sql (not written yet). (2) Resolve now clears the active closure request. (3) Reopen now also clears started_by and started_at. (4) An Overman's history is the Resolved exceptions he created. (5) The people view is removed; name snapshots are stored on the record instead, so the browser cannot list staff. Migration order: backup, 04, create accounts, re-run 04 link block, 05, build Phase B, test every role on the preview, merge Phase B, 07-lockdown, full permission test, keep 07-rollback for emergencies.
 - Login and roles, Phase B (Claude): index.html and dashboard.html are now role-aware and use auth.js. Not signed in, no profile or an inactive profile sends you to login.html. Header shows name, role and Sign out; menu is role-aware (Manager, Project Officer and General Manager see Dashboard only). Entry page: only Overman and Shift In-Charge; others see "Your role cannot create operational exceptions"; field renamed Reported Priority; saves with the create_exception function; final location names only. Dashboard: Overman sees active list, My history (resolved records he created), filters, remarks, closure state and permitted buttons, but no cards, Top 3, chart, management remarks or audit. Shift In-Charge and above see 3 cards, Top 3, chart, all records, history (audit) and their buttons. Everything uses current_priority; reported and current priority, who set it, when and why are shown. Every change goes through the database functions (start_exception, request_closure, decline_closure, resolve_exception, reopen_exception, change_priority, add_remark); database errors are shown on the card. No database change in Phase B. Tested against a scratch local Postgres copy driven through the real pages, not the live Supabase. Old location names may still appear inside the description text of older demo records (05 changes only the location field). Next: Data Keeper runs 04 and 05 and creates the accounts, team tests every role on the Vercel preview, then merge, then 07-lockdown.sql (not written yet).
 - Maker-checker fix (Claude): live testing found that a Shift In-Charge could confirm or decline their own closure request. Now decline_closure and resolve_exception reject the action when the caller is the person who requested the closure ("You cannot confirm or decline your own closure request. Another Shift In-Charge or authorised Manager must review it."). A Manager with can_operate may still review a Shift In-Charge or Overman request; an Overman still cannot decline or resolve; with NO closure request a Shift In-Charge can still resolve directly with a note of 5+ characters. Fixed in 04-auth-foundation.sql (fresh setups) and in the small new database/06-closure-confirmation-fix.sql (replaces only those two functions; for the database that already ran 04; no table or data change). dashboard.html shows the requester "Awaiting confirmation by another authorised officer." instead of Decline / Confirm Resolved. The future lockdown files are now 07-lockdown.sql and 07-rollback.sql (not written). New migration order: backup, 04, accounts, 04 again, 05, 06, test every role on the preview, merge, 07-lockdown, full permission test. Tested against a scratch local Postgres copy, not the live Supabase.
+- Final lockdown prepared (Claude): database/07-lockdown.sql and database/07-rollback.sql written, NOT run. 07-lockdown.sql removes the old public rules on shift_exceptions, takes all table and function access away from signed-out visitors, leaves signed-in users SELECT only plus the 8 action functions, my_access and app_rank, keeps row level security on for all 4 tables, adds NOT VALID value checks where safe, and ends with one verification table. 07-rollback.sql (EMERGENCY ONLY, re-opens public access) restores only the old open policies and grants on shift_exceptions. Tested against a scratch local Postgres copy set up like the live database: data identical before and after, second run changes nothing, every role and the maker-checker rule still work, direct writes are blocked, and the pages still work. NOT tested on the live Supabase. Must not be run until the login pages are live on main and every role has passed the preview tests.
