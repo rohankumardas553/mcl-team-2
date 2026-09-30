@@ -130,6 +130,38 @@
     details.thr summary { cursor: pointer; font-weight: 700; color: var(--navy); min-height: 44px; display: flex; align-items: center; }
     .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
+
+    /* Management overview: three levels (overview, detailed analysis, methodology) */
+    .periodbox { margin-top: 14px; padding: 12px 16px; }
+    .periodbox .cmp-period { font-size: 15px; margin-bottom: 2px; }
+    .periodbox #cmp-status { font-size: 14px; margin: 4px 0 0; }
+    .kpis .card .cmp { font-size: 14px; }
+    .kpis .card .cmp-prev { display: inline; }
+    .twocol { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    .toplist { list-style: none; margin: 0; padding: 0; }
+    .toplist li { display: block; padding: 8px 0; border-bottom: 1px solid #e3e9f4; }
+    .toplist li:last-child { border-bottom: 0; }
+    .toplist .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .toplist .nm { font-weight: 600; }
+    .toplist .val { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+    .toplist .meta { font-size: 14px; color: #33466b; margin-top: 2px; }
+    .toplist .bar2 { height: 6px; border-radius: 3px; background: #e3e9f4; margin-top: 6px; }
+    .toplist .bar2 i { display: block; height: 100%; border-radius: 3px; background: var(--navy); }
+    .fdata { list-style: none; margin: 0; padding: 0; }
+    .fdata li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #e3e9f4; font-weight: 600; }
+    .fdata li:last-child { border-bottom: 0; }
+    details.lvl2 { margin-top: 26px; }
+    details.lvl2 > summary { cursor: pointer; list-style: none; min-height: 60px; display: flex; align-items: center; justify-content: center; gap: 10px;
+        font-size: 18px; font-weight: 800; color: #fff; background: var(--navy); border-radius: 14px; padding: 0 20px; box-shadow: 0 2px 8px rgba(11, 42, 91, .18); }
+    details.lvl2 > summary::-webkit-details-marker { display: none; }
+    details.lvl2 > summary::after { content: "\25BE"; }
+    details.lvl2[open] > summary::after { content: "\25B4"; }
+    details.lvl2 > summary:focus-visible, details.lvl3 > summary:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+    details.lvl3 { margin-top: 26px; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; }
+    details.lvl3 > summary { cursor: pointer; min-height: 56px; display: flex; align-items: center; font-weight: 800; font-size: 17px; color: var(--navy); }
+    details.lvl3 > .lvlbody { padding-bottom: 14px; }
+    .reviewlist .row { align-items: flex-start; }
+
     #msg { padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; margin-bottom: 12px; }
     #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
     #loading { padding: 18px; color: #33466b; font-weight: 700; }
@@ -146,6 +178,7 @@
       .hotlist { grid-template-columns: repeat(2, 1fr); }
       .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .ready-grid { grid-template-columns: 1fr 1fr; }
+      .twocol { grid-template-columns: 1fr 1fr; }
     }
     @media (min-width: 1000px) {
       main { padding: 24px; }
@@ -153,6 +186,7 @@
       .filters { grid-template-columns: 1.3fr 1fr 1fr 1fr auto; align-items: end; }
       #custom-dates { grid-column: 1 / -1; }
       .cards { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .kpis.cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .card .n { font-size: 34px; }
       .hotlist { grid-template-columns: repeat(5, 1fr); }
       .hot { flex-direction: column; align-items: flex-start; }
@@ -181,8 +215,8 @@
 
   <main>
     <div class="title">
-      <h1>Analytics</h1>
-      <p>What happened, how it changed compared with the previous period, and whether the history is sufficient for a later forecast.</p>
+      <h1>Management Overview</h1>
+      <p>Operational performance, period comparison and recurring issues.</p>
     </div>
     <div id="msg" role="status"></div>
 
@@ -218,43 +252,77 @@
       <div id="loading">Loading analytics...</div>
 
       <div id="content" hidden>
-        <!-- 2. Period comparison -->
-        <h2>Period Comparison</h2>
-        <div class="panel">
+        <!-- LEVEL 1: Management Overview -->
+        <div class="panel periodbox">
           <div id="cmp-periods"></div>
           <p id="cmp-status"></p>
         </div>
 
-        <!-- 3. KPI cards (current value, with previous value and change below) -->
-        <div class="cards">
-          <div class="card"><div class="n" id="k-total">-</div><div class="t">Total Exceptions</div><div class="s" id="k-total-sub"></div><div class="cmp" id="k-total-cmp"></div></div>
-          <div class="card"><div class="n" id="k-impact">-</div><div class="t">Total Recorded Impact Minutes</div><div class="s" id="k-impact-sub"></div><div class="cmp" id="k-impact-cmp"></div></div>
+        <div class="cards kpis">
+          <div class="card"><div class="n" id="k-total">-</div><div class="t">Exceptions</div><div class="s" id="k-total-sub"></div><div class="cmp" id="k-total-cmp"></div></div>
+          <div class="card"><div class="n" id="k-impact">-</div><div class="t">Recorded Impact</div><div class="s" id="k-impact-sub"></div><div class="cmp" id="k-impact-cmp"></div></div>
           <div class="card"><div class="n" id="k-avg">-</div><div class="t">Average Impact per Exception</div><div class="s" id="k-avg-sub"></div><div class="cmp" id="k-avg-cmp"></div></div>
-          <div class="card"><div class="n" id="k-start">-</div><div class="t">Average Time from Reporting to Start of Work</div><div class="s" id="k-start-sub"></div><div class="cmp" id="k-start-cmp"></div></div>
-          <div class="card"><div class="n" id="k-resolve">-</div><div class="t">Average Time from Reporting to Resolution</div><div class="s" id="k-resolve-sub"></div><div class="cmp" id="k-resolve-cmp"></div></div>
-          <div class="card"><div class="n" id="k-reopened">-</div><div class="t">Reopened Exceptions</div><div class="s" id="k-reopened-sub"></div><div class="cmp" id="k-reopened-cmp"></div></div>
+          <div class="card"><div class="n" id="k-start">-</div><div class="t">Response Time</div><div class="s" id="k-start-sub"></div><div class="cmp" id="k-start-cmp"></div></div>
+          <div class="card"><div class="n" id="k-resolve">-</div><div class="t">Resolution Time</div><div class="s" id="k-resolve-sub"></div><div class="cmp" id="k-resolve-cmp"></div></div>
+          <div class="card"><div class="n" id="k-reopened">-</div><div class="t">Reopened Issues</div><div class="s" id="k-reopened-sub"></div><div class="cmp" id="k-reopened-cmp"></div></div>
         </div>
 
-        <!-- 4. Strategic management attention -->
-        <h2>Strategic Management Attention</h2>
+        <h2>Management Summary</h2>
         <div class="panel">
           <p class="lead" id="attention-lead"></p>
           <ul id="attention"></ul>
           <p class="note" id="attention-note">Facts calculated from the current and previous periods. No prediction, inferred cause or recommendation.</p>
         </div>
 
-        <!-- 4. Trend charts -->
         <h2>Trends</h2>
         <div class="charts">
-          <div class="panel"><h3 id="t-created">Exceptions Reported Over Time</h3><div class="chartbox"><canvas id="c-created"></canvas></div></div>
-          <div class="panel"><h3 id="t-impact">Impact Minutes Over Time</h3><div class="chartbox"><canvas id="c-impact"></canvas></div></div>
-          <div class="panel"><h3>Impact Minutes by Category</h3><div class="chartbox"><canvas id="c-cat"></canvas></div></div>
-          <div class="panel"><h3>Impact Minutes by Location</h3><div class="chartbox"><canvas id="c-loc"></canvas></div></div>
-          <div class="panel"><h3>Exceptions by Shift</h3><div class="chartbox"><canvas id="c-shift"></canvas></div></div>
-          <div class="panel"><h3>Top 10 Issue Types (by number of exceptions)</h3><div class="chartbox"><canvas id="c-issue"></canvas></div></div>
+          <div class="panel"><h3 id="t-created">Exceptions Over Time</h3><div class="chartbox"><canvas id="c-created"></canvas></div></div>
+          <div class="panel"><h3 id="t-impact">Recorded Impact Over Time</h3><div class="chartbox"><canvas id="c-impact"></canvas></div></div>
         </div>
 
-        <!-- 6. Phase D comparison sections -->
+        <h2>Where is the operational impact?</h2>
+        <div class="twocol">
+          <div class="panel"><h3>Top Impact Locations</h3>
+            <div class="empty" id="top-loc-empty" hidden>No exceptions match the selected filters.</div>
+            <ol class="toplist" id="top-loc"></ol></div>
+          <div class="panel"><h3>Top Recurring Issues</h3>
+            <div class="empty" id="top-issue-empty" hidden>No exceptions match the selected filters.</div>
+            <ol class="toplist" id="top-issue"></ol></div>
+        </div>
+
+        <div class="cmp" id="review-block">
+        <h2>Items for Management Review</h2>
+        <div class="panel">
+          <div class="empty" id="review-empty" hidden></div>
+          <ol class="toplist reviewlist" id="review-list"></ol>
+          <button type="button" class="linkbtn" id="review-more" hidden></button>
+          <p class="note">Listed from recorded period-to-period changes; not a recommendation or risk score.</p>
+        </div>
+        </div>
+
+        <h2>Data Available for Future Forecasting</h2>
+        <div class="panel">
+          <ul class="fdata" id="fdata">
+            <li><span>Number of issues</span><span class="rbadge" id="fd-count"></span></li>
+            <li><span>Operational impact</span><span class="rbadge" id="fd-impact"></span></li>
+            <li><span>Response time</span><span class="rbadge" id="fd-start"></span></li>
+            <li><span>Resolution time</span><span class="rbadge" id="fd-resolve"></span></li>
+          </ul>
+          <p class="note">This checks historical data availability only. It does not make a forecast. <a href="#method" id="fd-link">See the data rules</a></p>
+        </div>
+
+        <!-- LEVEL 2: View Detailed Analysis -->
+        <details class="lvl2" id="detail">
+          <summary>View Detailed Analysis</summary>
+          <div class="lvlbody">
+            <h2>More Charts</h2>
+            <div class="charts">
+              <div class="panel"><h3>Impact Minutes by Category</h3><div class="chartbox"><canvas id="c-cat"></canvas></div></div>
+              <div class="panel"><h3>Impact Minutes by Location</h3><div class="chartbox"><canvas id="c-loc"></canvas></div></div>
+              <div class="panel"><h3>Exceptions by Shift</h3><div class="chartbox"><canvas id="c-shift"></canvas></div></div>
+              <div class="panel"><h3>Top 10 Issue Types (by number of exceptions)</h3><div class="chartbox"><canvas id="c-issue"></canvas></div></div>
+            </div>
+
         <div class="cmp">
         <h2>Category Change</h2>
         <div class="panel">
@@ -357,6 +425,10 @@
           <div class="card"><div class="n" id="priority-changes">-</div><div class="t">Exceptions with a Priority Change</div><div class="s" id="priority-changes-sub"></div><div class="cmp" id="priority-changes-cmp"></div></div>
         </div>
 
+            <!-- LEVEL 3: Methodology & Data Details -->
+            <details class="lvl3" id="method">
+              <summary>Methodology &amp; Data Details</summary>
+              <div class="lvlbody">
         <!-- 9. Phase E: forecast readiness (data sufficiency only; no forecast) -->
         <h2>Forecast Readiness</h2>
         <div class="panel">
@@ -439,6 +511,10 @@
           use each exception&rsquo;s current start and resolution times. An exception that was reopened and worked again counts once;
           its earlier cycles are not added up separately.
         </p>
+              </div>
+            </details>
+          </div>
+        </details>
       </div>
     </div>
   </main>

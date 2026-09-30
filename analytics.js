@@ -1039,6 +1039,17 @@
     if (c.note) box.appendChild(el("div", "cmp-note", c.note));
   }
 
+  // One compact line for a headline card: "Previous: 393 · +8 (+2.0%)" (no unit; the card shows it)
+  function fillCmpLine(id, d, dp) {
+    var box = $(id);
+    box.textContent = "";
+    var prev = d.prev === null || d.prev === undefined ? "—" : (dp ? one(d.prev) : num(d.prev));
+    var c = changeParts(d, "", dp, false);
+    var chg = d.abs === null ? "change not available" : c.main;
+    box.appendChild(el("span", "cmp-prev", "Previous: " + prev + " \u00b7 "));
+    box.appendChild(el("span", "cmp-chg", chg));
+  }
+
   // Table cells for a change: an arrow shows the direction only (no colour judgement).
   function chgText(d) {
     if (d.abs === null) return "—";
@@ -1095,12 +1106,12 @@
     }[cmp.status];
 
     // KPI cards
-    fillCmp("k-total-cmp", cmp.kpis.total, "", 0);
-    fillCmp("k-impact-cmp", cmp.kpis.impact, "min", 0);
-    fillCmp("k-avg-cmp", cmp.kpis.avg, "min", 1);
-    fillCmp("k-start-cmp", cmp.kpis.start, "min", 1);
-    fillCmp("k-resolve-cmp", cmp.kpis.resolve, "min", 1);
-    fillCmp("k-reopened-cmp", cmp.kpis.reopened, "", 0);
+    fillCmpLine("k-total-cmp", cmp.kpis.total, 0);
+    fillCmpLine("k-impact-cmp", cmp.kpis.impact, 0);
+    fillCmpLine("k-avg-cmp", cmp.kpis.avg, 1);
+    fillCmpLine("k-start-cmp", cmp.kpis.start, 1);
+    fillCmpLine("k-resolve-cmp", cmp.kpis.resolve, 1);
+    fillCmpLine("k-reopened-cmp", cmp.kpis.reopened, 0);
     fillCmp("priority-changes-cmp", cmp.priorityChanges, "", 0);
 
     // Category and location change
@@ -1274,6 +1285,78 @@
     });
   }
 
+  // ---------------------------------------------------------------- Management overview (level 1 blocks; same numbers as below)
+  var PLAIN_STATE = { "Ready": "Enough data", "Limited": "More history needed", "Not Ready": "Not enough data" };
+
+  function topRows(listId, emptyId, rows) {
+    var ol = $(listId);
+    ol.textContent = "";
+    $(emptyId).hidden = rows.length > 0;
+    var max = rows.reduce(function (m, x) { return Math.max(m, x.value); }, 0);
+    rows.forEach(function (x) {
+      var li = el("li");
+      var row = el("div", "row");
+      row.appendChild(el("span", "nm", x.name));
+      row.appendChild(el("span", "val", x.text));
+      li.appendChild(row);
+      if (x.meta) li.appendChild(el("div", "meta", x.meta));
+      var bar = el("div", "bar2");
+      var fill = el("i");
+      fill.style.width = (max ? Math.max(3, Math.round(x.value / max * 100)) : 0) + "%";
+      bar.appendChild(fill);
+      li.appendChild(bar);
+      ol.appendChild(li);
+    });
+  }
+
+  function drawOverview(result) {
+    var r = result.cur;
+
+    // Where is the operational impact? (top 5 of the lists already calculated)
+    var locs = r.byLocation.filter(function (x) { return x.minutes > 0; }).slice()
+      .sort(function (a, b) { return b.minutes - a.minutes || b.count - a.count || byLabel(a.name, b.name); }).slice(0, 5);
+    topRows("top-loc", "top-loc-empty", locs.map(function (x) {
+      return { name: x.name, value: x.minutes, text: num(x.minutes) + " min", meta: x.count + " exception" + (x.count === 1 ? "" : "s") };
+    }));
+    topRows("top-issue", "top-issue-empty", r.topIssues.slice(0, 5).map(function (x) {
+      return { name: x.issue, value: x.count, text: x.count + " exception" + (x.count === 1 ? "" : "s"), meta: x.category };
+    }));
+
+    // Items for management review (first 5 of the existing candidate list)
+    var cmp = result.cmp, list = $("review-list"), more = $("review-more"), empty = $("review-empty");
+    list.textContent = "";
+    more.hidden = true;
+    if (cmp) {
+      empty.hidden = cmp.hasBoth && cmp.candidates.length > 0;
+      empty.textContent = !cmp.hasBoth ? "Review items need exceptions in both the current and the previous period."
+        : cmp.candidates.length ? "" : "No group had more impact minutes, exceptions or reopened exceptions than in the previous period.";
+      if (cmp.hasBoth) {
+        cmp.candidates.slice(0, 5).forEach(function (x) {
+          var li = el("li");
+          var row = el("div", "row");
+          row.appendChild(el("span", "nm", x.category + " \u00b7 " + x.issue + " \u00b7 " + x.location));
+          li.appendChild(row);
+          li.appendChild(el("div", "meta", x.curCount + " exception" + (x.curCount === 1 ? "" : "s") + " \u00b7 " + num(x.curMinutes) + " impact minutes"));
+          list.appendChild(li);
+        });
+        more.hidden = cmp.candidateCount <= 5;
+        more.textContent = "View all " + cmp.candidateCount + " items";
+      }
+    }
+
+    // Data available for future forecasting (plain wording; exact states stay in the methodology section)
+    var R = r.readiness;
+    [["count", R.exceptionCount], ["impact", R.impactMinutes], ["start", R.timeToStart], ["resolve", R.timeToResolve]].forEach(function (m) {
+      var b = $("fd-" + m[0]);
+      b.textContent = PLAIN_STATE[m[1].state];
+      b.className = "rbadge " + stateClass(m[1].state);
+    });
+  }
+
+  function resizeCharts() {
+    Object.keys(charts).forEach(function (k) { if (charts[k] && charts[k].resize) charts[k].resize(); });
+  }
+
   function draw(result) {
     var r = result.cur;
     lastResult = r;
@@ -1282,9 +1365,9 @@
     setKpi("k-impact", num(r.totalImpact), "minutes");
     setKpi("k-avg", r.avgImpact === null ? "—" : one(r.avgImpact), r.avgImpact === null ? "No exceptions in the selected period" : "minutes per exception");
     setKpi("k-start", r.timeToStart.n ? one(r.timeToStart.avg) : "—",
-      r.timeToStart.n ? "minutes · based on " + r.timeToStart.n + " exception" + (r.timeToStart.n === 1 ? "" : "s") + " with a start time" : "No start times recorded in the selected period");
+      r.timeToStart.n ? "minutes from reporting until work starts" : "No start times recorded in the selected period");
     setKpi("k-resolve", r.timeToResolve.n ? one(r.timeToResolve.avg) : "—",
-      r.timeToResolve.n ? "minutes · based on " + r.timeToResolve.n + " resolved exception" + (r.timeToResolve.n === 1 ? "" : "s") : "No resolved exceptions in the selected period");
+      r.timeToResolve.n ? "minutes from reporting until resolution" : "No resolved exceptions in the selected period");
     setKpi("k-reopened", String(r.reopened), r.total ? "of " + r.total + " exceptions" : "");
 
     // Strategic management attention (period-over-period facts; the fallback text when no comparison is possible)
@@ -1300,8 +1383,8 @@
     // Charts
     var s = r.series;
     var per = s.mode === "day" ? "day" : "month";
-    $("t-created").textContent = "Exceptions Reported Over Time (per " + per + ")";
-    $("t-impact").textContent = "Impact Minutes Over Time (per " + per + ")";
+    $("t-created").textContent = "Exceptions Over Time (per " + per + ")";
+    $("t-impact").textContent = "Recorded Impact Over Time (per " + per + ")";
     var ov = result.overlay;
     var hasChartData = r.total > 0 || (ov && result.prev && result.prev.total > 0);
     chart("c-created", lineConfig(s.labels, s.counts, "Exceptions", NAVY, ov ? ov.counts : null), hasChartData);
@@ -1356,6 +1439,7 @@
 
     drawComparison(result);
     drawReadiness(result);
+    drawOverview(result);
   }
 
   async function refresh() {
@@ -1398,6 +1482,19 @@
       showAllConstraints = !showAllConstraints;
       if (lastResult) drawConstraints(lastResult);
     });
+    $("review-more").addEventListener("click", function () {
+      $("detail").open = true;
+      resizeCharts();
+      $("cand-table").closest(".panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    $("fd-link").addEventListener("click", function (e) {
+      e.preventDefault();
+      $("detail").open = true;
+      $("method").open = true;
+      resizeCharts();
+      $("method").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    $("detail").addEventListener("toggle", resizeCharts);
     syncCustom();
   }
 
