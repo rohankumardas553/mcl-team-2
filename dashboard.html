@@ -15,10 +15,10 @@
     main { max-width: 760px; margin: 0 auto; padding: 16px; }
     h1 { font-size: 24px; margin: 8px 0 16px; }
     h2 { font-size: 20px; margin: 24px 0 8px; }
-    .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .card { background: #fff; border: 2px solid #0b2a5b; border-radius: 12px; padding: 14px; }
-    .card .n { font-size: 34px; font-weight: bold; }
-    .card .t { font-size: 15px; }
+    .card .n { font-size: 30px; font-weight: bold; }
+    .card .t { font-size: 14px; }
     .card.high { border-color: #dc2626; }
     .card.high .n { color: #b91c1c; }
     .panel { background: #fff; border-radius: 12px; padding: 12px; border: 1px solid #c7d2e5; }
@@ -32,6 +32,16 @@
     .badge.High { background: #dc2626; color: #fff; }
     .badge.Medium { background: #f59e0b; color: #1f1300; }
     .badge.Low { background: #d1d5db; color: #1f2937; }
+    .filters { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 12px; }
+    .filters label { display: block; font-weight: bold; font-size: 16px; margin-bottom: 4px; }
+    .filters select { width: 100%; font-size: 18px; padding: 12px; min-height: 54px;
+      border: 2px solid #0b2a5b; border-radius: 10px; background: #fff; color: #0b1f44; }
+    .item.overdue { border-left: 6px solid #dc2626; padding-left: 10px; }
+    .badge.overdue { background: #fff; color: #dc2626; border: 2px solid #dc2626; }
+    .badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .act { width: 100%; margin-top: 10px; min-height: 54px; font-size: 18px; font-weight: bold;
+      background: #0b2a5b; color: #fff; border: 0; border-radius: 10px; }
+    .act:disabled { opacity: .6; }
     #msg { padding: 14px; border-radius: 10px; display: none; word-wrap: break-word; }
     #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
     #msg.info { display: block; background: #e0e7ff; color: #0b2a5b; border: 2px solid #0b2a5b; }
@@ -48,16 +58,25 @@
     <div id="msg" role="status"></div>
 
     <div class="cards">
-      <div class="card"><div class="n" id="k-open">-</div><div class="t">Not resolved yet</div></div>
-      <div class="card high"><div class="n" id="k-high">-</div><div class="t">High urgency, not resolved</div></div>
-      <div class="card"><div class="n" id="k-min">-</div><div class="t">Impact minutes, last 14 days</div></div>
-      <div class="card"><div class="n" id="k-total">-</div><div class="t">Exceptions, last 14 days</div></div>
+      <div class="card"><div class="n" id="k-open">-</div><div class="t">Open Exceptions</div></div>
+      <div class="card high"><div class="n" id="k-high">-</div><div class="t">High Priority</div></div>
+      <div class="card"><div class="n" id="k-min">-</div><div class="t">Active Impact Minutes</div></div>
     </div>
 
     <h2>Impact minutes per day</h2>
     <div class="panel"><div class="chartbox"><canvas id="chart"></canvas></div></div>
 
-    <h2>Latest exceptions</h2>
+    <h2>Exceptions</h2>
+    <div class="filters">
+      <div><label for="f-cat">Category</label><select id="f-cat">
+        <option>All</option><option>Coal Despatch</option><option>Dust Suppression</option></select></div>
+      <div><label for="f-shift">Shift</label><select id="f-shift">
+        <option>All</option><option>First</option><option>Second</option><option>Night</option></select></div>
+      <div><label for="f-loc">Location</label><select id="f-loc">
+        <option>All</option><option>Coal Face A</option><option>Coal Face B</option>
+        <option>Haul Road A</option><option>Haul Road B</option><option>Junction A</option>
+        <option>Stockyard A</option><option>Siding A</option><option>Siding B</option></select></div>
+    </div>
     <div class="panel" id="list">Loading...</div>
   </main>
   <footer>Training prototype &ndash; all data is made up</footer>
@@ -79,10 +98,16 @@
       return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
     }
 
-    function render(rows) {
+    var db = null, allRows = [], chart = null;
+
+    function isOverdue(r) {
+      return r.urgency === "High" && r.status !== "Resolved" &&
+             (Date.now() - new Date(r.created_at).getTime()) > 30 * 60 * 1000;
+    }
+
+    function drawChart(rows) {
       var now = new Date();
       var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13);
-      var open = 0, high = 0, mins = 0, total = 0;
       var days = [], byDay = {};
       for (var i = 0; i < 14; i++) {
         var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
@@ -91,24 +116,13 @@
         byDay[k] = { "Coal Despatch": 0, "Dust Suppression": 0 };
       }
       rows.forEach(function (r) {
-        if (r.status !== "Resolved") {
-          open++;
-          if (r.urgency === "High") high++;
-        }
         var c = new Date(r.created_at);
         if (c >= start) {
-          total++;
-          mins += r.impact_minutes || 0;
           var b = byDay[dayKey(c)];
           if (b && b[r.category] !== undefined) b[r.category] += r.impact_minutes || 0;
         }
       });
-      document.getElementById("k-open").textContent = open;
-      document.getElementById("k-high").textContent = high;
-      document.getElementById("k-min").textContent = mins;
-      document.getElementById("k-total").textContent = total;
-
-      new Chart(document.getElementById("chart"), {
+      chart = new Chart(document.getElementById("chart"), {
         type: "bar",
         data: {
           labels: days.map(function (k) { return k.slice(8) + "/" + k.slice(5, 7); }),
@@ -124,22 +138,88 @@
           scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: "Minutes" } } }
         }
       });
+    }
+
+    function filtered() {
+      var cat = document.getElementById("f-cat").value;
+      var shift = document.getElementById("f-shift").value;
+      var loc = document.getElementById("f-loc").value;
+      return allRows.filter(function (r) {
+        return (cat === "All" || r.category === cat) &&
+               (shift === "All" || r.shift === shift) &&
+               (loc === "All" || r.location === loc);
+      });
+    }
+
+    function renderView() {
+      var rows = filtered();
+      var open = 0, high = 0, mins = 0;
+      rows.forEach(function (r) {
+        if (r.status === "Open" || r.status === "In progress") open++;
+        if (r.status !== "Resolved") {
+          mins += r.impact_minutes || 0;
+          if (r.urgency === "High") high++;
+        }
+      });
+      document.getElementById("k-open").textContent = open;
+      document.getElementById("k-high").textContent = high;
+      document.getElementById("k-min").textContent = mins;
 
       var list = document.getElementById("list");
       list.textContent = "";
-      if (!rows.length) { list.textContent = "No exceptions recorded yet."; return; }
-      rows.slice(0, 10).forEach(function (r) {
-        var item = el("div", "item");
+      if (!rows.length) { list.textContent = "No exceptions match these filters."; return; }
+      rows.forEach(function (r) {
+        var item = el("div", "item" + (isOverdue(r) ? " overdue" : ""));
         var top = el("div", "top");
         top.appendChild(el("span", "", r.category + " - " + r.issue_type));
-        top.appendChild(el("span", "badge " + r.urgency, r.urgency));
+        var badges = el("span", "badges");
+        if (isOverdue(r)) badges.appendChild(el("span", "badge overdue", "OVERDUE"));
+        badges.appendChild(el("span", "badge " + r.urgency, r.urgency));
+        top.appendChild(badges);
         item.appendChild(top);
         item.appendChild(el("div", "meta", new Date(r.created_at).toLocaleDateString() + " | " +
           r.shift + " shift | " + r.location + " | " + r.impact_minutes + " min | " + r.status));
         item.appendChild(el("div", "desc", r.description || ""));
+        if (r.status === "Open" || r.status === "In progress") {
+          var btn = el("button", "act", r.status === "Open" ? "Start" : "Resolve");
+          btn.type = "button";
+          btn.addEventListener("click", function () { changeStatus(r, btn); });
+          item.appendChild(btn);
+        }
         list.appendChild(item);
       });
     }
+
+    async function loadRows() {
+      var res = await db.from("shift_exceptions")
+        .select("id,created_at,shift,location,category,issue_type,description,impact_minutes,urgency,status")
+        .order("created_at", { ascending: false }).limit(1000);
+      if (res.error) throw new Error(res.error.message);
+      allRows = res.data || [];
+    }
+
+    async function changeStatus(r, btn) {
+      btn.disabled = true;
+      msg.className = ""; msg.textContent = "";
+      try {
+        var change = r.status === "Open"
+          ? { from: "Open", values: { status: "In progress" } }
+          : { from: "In progress", values: { status: "Resolved", resolved_at: new Date().toISOString() } };
+        var res = await db.from("shift_exceptions").update(change.values)
+          .eq("id", r.id).eq("status", change.from).select("id");
+        if (res.error) throw new Error(res.error.message);
+        if (!res.data || !res.data.length) throw new Error("The record was not changed. It may have been updated by someone else. Please check the list.");
+        await loadRows();
+        renderView();
+      } catch (e) {
+        fail("Sorry, the status could not be changed. Error: " + e.message);
+        btn.disabled = false;
+      }
+    }
+
+    ["f-cat", "f-shift", "f-loc"].forEach(function (id) {
+      document.getElementById(id).addEventListener("change", renderView);
+    });
 
     (async function () {
       try {
@@ -147,12 +227,10 @@
                     (window.SUPABASE_PUBLISHABLE_KEY || "").indexOf("sb_publishable_") === 0;
         if (!ready) throw new Error("Database settings in config.js are not filled in yet.");
         if (!window.Chart) throw new Error("The chart library could not be loaded.");
-        var db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
-        var res = await db.from("shift_exceptions")
-          .select("created_at,shift,location,category,issue_type,description,impact_minutes,urgency,status")
-          .order("created_at", { ascending: false }).limit(1000);
-        if (res.error) throw new Error(res.error.message);
-        render(res.data || []);
+        db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
+        await loadRows();
+        drawChart(allRows);
+        renderView();
       } catch (e) {
         document.getElementById("list").textContent = "";
         fail("Sorry, the dashboard could not load. Error: " + e.message);
