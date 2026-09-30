@@ -114,7 +114,9 @@
   // Which pages each person sees in the menu. Convenience only: the database decides.
   var PAGES = [
     { id: "index",     href: "index.html",     label: "Add Shift Exception", action: "create" },
-    { id: "dashboard", href: "dashboard.html", label: "Dashboard",           action: null }
+    { id: "dashboard", href: "dashboard.html", label: "Dashboard",           action: null },
+    // Management analytics: Shift In-Charge, Manager, Project Officer, General Manager (never the Overman).
+    { id: "analytics", href: "analytics.html", label: "Analytics",           action: "view_analytics" }
   ];
 
   // Fills the shared header: role-aware menu, the person's name and role, and Sign out.

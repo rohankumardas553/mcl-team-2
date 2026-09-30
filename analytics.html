@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MineShift Command - Analytics</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { --navy: #0b2a5b; --navy-dark: #071c40; --ink: #0b1f44; --line: #c7d2e5; --bg: #eef2f8; }
+    body { margin: 0; font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif; background: var(--bg);
+           color: var(--ink); font-size: 18px; line-height: 1.4; }
+    [hidden] { display: none !important; }
+
+    /* Shared header (same on every page) */
+    header { background: var(--navy-dark); color: #fff; border-bottom: 4px solid #f59e0b; }
+    .bar { max-width: 1240px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap;
+           align-items: center; justify-content: space-between; gap: 8px 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: .3px; }
+    .mark { width: 38px; height: 38px; border-radius: 9px; background: #fff; color: var(--navy);
+            display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
+    .right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+    nav { display: flex; flex-wrap: wrap; gap: 6px; }
+    nav a { color: #fff; text-decoration: none; font-weight: 600; font-size: 16px; padding: 10px 16px;
+            min-height: 44px; display: inline-flex; align-items: center; border-radius: 10px; }
+    nav a:hover { background: rgba(255,255,255,.14); }
+    nav a.active { background: #fff; color: var(--navy); }
+    .who { display: flex; align-items: center; gap: 12px; }
+    .who-text { display: flex; flex-direction: column; line-height: 1.2; text-align: right; }
+    .who-name { font-weight: 700; font-size: 15px; }
+    .who-role { font-size: 13px; color: #c7d2e5; }
+    .who-out { min-height: 44px; padding: 0 16px; font: inherit; font-size: 15px; font-weight: 700; color: #fff;
+               background: transparent; border: 2px solid rgba(255,255,255,.6); border-radius: 10px; cursor: pointer; }
+    .who-out:hover { background: rgba(255,255,255,.14); }
+    .who-out:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+
+    main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 8px; }
+    .title h1 { font-size: 28px; margin: 4px 0 4px; }
+    .title p { margin: 0 0 16px; color: #33466b; font-size: 16px; }
+    h2 { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--navy);
+         margin: 26px 0 10px; display: flex; align-items: center; gap: 10px; }
+    h2::before { content: ""; width: 6px; height: 20px; border-radius: 3px; background: #f59e0b; }
+    h3 { font-size: 16px; margin: 0 0 8px; }
+
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+             box-shadow: 0 2px 8px rgba(11, 42, 91, .08); }
+
+    /* Filters */
+    .filters { display: grid; grid-template-columns: 1fr; gap: 10px; background: #fff; padding: 14px;
+               border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 2px 8px rgba(11, 42, 91, .08); }
+    .filters label { display: block; font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+    .filters select, .filters input[type=date] { width: 100%; font: inherit; padding: 12px; min-height: 56px; color: var(--ink);
+             border: 2px solid var(--line); border-radius: 12px; background: #fff; }
+    .filters select:focus, .filters input:focus { outline: 3px solid rgba(11, 42, 91, .35); border-color: var(--navy); }
+    #custom-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .reset button { width: 100%; min-height: 56px; font: inherit; font-weight: 700; color: var(--navy);
+                    background: #fff; border: 2px solid var(--navy); border-radius: 12px; cursor: pointer; }
+    .reset button:hover { background: var(--navy); color: #fff; }
+    .reset button:focus-visible, .linkbtn:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+
+    /* KPI cards */
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .card { background: #fff; border: 1px solid var(--line); border-top: 6px solid var(--navy); border-radius: 16px;
+            padding: 12px; overflow-wrap: anywhere; box-shadow: 0 2px 8px rgba(11, 42, 91, .08); }
+    .card .n { font-size: 32px; font-weight: 800; line-height: 1.1; }
+    .card .t { font-size: 14px; font-weight: 700; color: #33466b; margin-top: 4px; }
+    .card .s { font-size: 13px; color: #4b5d80; margin-top: 2px; }
+
+    /* Management attention */
+    #attention { margin: 0; padding: 0; list-style: none; }
+    #attention li { padding: 12px 14px 12px 16px; margin-bottom: 8px; background: #f8fafd; border-left: 6px solid #f59e0b;
+                    border-radius: 8px; font-size: 17px; }
+    #attention li:last-child { margin-bottom: 0; }
+    .note { font-size: 14px; color: #4b5d80; margin: 8px 0 0; }
+
+    /* Charts */
+    .charts { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    .chartbox { position: relative; height: 280px; }
+    .chartbox canvas { max-width: 100%; }
+    .nodata, .empty { color: #4b5d80; font-size: 15px; padding: 18px 4px; }
+
+    /* Hotspots */
+    .hotlist { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .hot { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .rank { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+            border-radius: 50%; background: var(--navy); color: #fff; font-weight: 700; }
+    .hot-title { font-weight: 700; }
+    .hot-meta { font-size: 15px; color: #33466b; }
+
+    /* Tables (stack into cards on phones: no sideways scrolling) */
+    table { width: 100%; border-collapse: collapse; font-size: 16px; }
+    thead { display: none; }
+    tr { display: block; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin-bottom: 10px; background: #fff; }
+    td { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border: 0; text-align: right; }
+    td::before { content: attr(data-label); font-weight: 700; color: #33466b; text-align: left; }
+    td.n { font-variant-numeric: tabular-nums; }
+    .badge { padding: 4px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+    .badge.High { background: #dc2626; color: #fff; }
+    .badge.Medium { background: #f59e0b; color: #1f1300; }
+    .badge.Low { background: #d1d5db; color: #1f2937; }
+    .linkbtn { margin-top: 10px; min-height: 52px; padding: 0 20px; font: inherit; font-weight: 700; color: var(--navy);
+               background: #fff; border: 2px solid var(--navy); border-radius: 12px; cursor: pointer; }
+    .linkbtn:hover { background: var(--navy); color: #fff; }
+
+    .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+    #msg { padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; margin-bottom: 12px; }
+    #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
+    #loading { padding: 18px; color: #33466b; font-weight: 700; }
+    #content.busy { opacity: .55; }
+    #denied p { margin: 0 0 12px; }
+    #denied a { display: block; text-align: center; padding: 16px; min-height: 56px; font-weight: 700; color: var(--navy);
+                border: 2px solid var(--navy); border-radius: 12px; text-decoration: none; }
+    footer { text-align: center; padding: 20px 16px 28px; font-size: 14px; color: var(--navy); }
+
+    @media (min-width: 700px) {
+      .filters { grid-template-columns: repeat(2, 1fr); }
+      .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      .charts { grid-template-columns: 1fr 1fr; }
+      .hotlist { grid-template-columns: repeat(2, 1fr); }
+      .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @media (min-width: 1000px) {
+      main { padding: 24px; }
+      .title h1 { font-size: 32px; }
+      .filters { grid-template-columns: 1.3fr 1fr 1fr 1fr auto; align-items: end; }
+      #custom-dates { grid-column: 1 / -1; }
+      .cards { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .card .n { font-size: 34px; }
+      .hotlist { grid-template-columns: repeat(5, 1fr); }
+      .hot { flex-direction: column; align-items: flex-start; }
+      thead { display: table-header-group; }
+      thead th { text-align: left; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; color: #33466b;
+                 padding: 8px 10px; border-bottom: 2px solid var(--line); }
+      thead th.n { text-align: right; }
+      tr { display: table-row; border: 0; border-radius: 0; padding: 0; margin: 0; background: transparent; }
+      td { display: table-cell; padding: 10px; border-bottom: 1px solid #e3e9f4; text-align: left; }
+      td.n { text-align: right; }
+      td::before { content: none; }
+      #constraints-table tbody tr:hover, #priority-table tbody tr:hover { background: #f3f6fb; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand"><span class="mark">MS</span>MineShift Command</div>
+      <div class="right">
+        <nav id="nav"></nav>
+        <div class="who" id="who"></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="title">
+      <h1>Analytics</h1>
+      <p>Which recurring operational constraints cost the most time, where they happen, and whether the pattern is changing.</p>
+    </div>
+    <div id="msg" role="status"></div>
+
+    <section class="panel" id="denied" hidden>
+      <h3>Not authorised</h3>
+      <p>Management analytics are for Shift In-Charge, Manager, Project Officer and General Manager. Your role cannot see this page.</p>
+      <a href="dashboard.html">Go to the Dashboard &rarr;</a>
+    </section>
+
+    <div id="app" hidden>
+      <!-- 1. Filters -->
+      <div class="filters">
+        <div><label for="f-range">Date range</label><select id="f-range">
+          <option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option><option value="all">All time</option>
+          <option value="custom">Custom range</option></select></div>
+        <div><label for="f-shift">Shift</label><select id="f-shift">
+          <option>All</option><option>First</option><option>Second</option><option>Night</option></select></div>
+        <div><label for="f-cat">Category</label><select id="f-cat">
+          <option>All</option><option>Coal Despatch</option><option>Dust Suppression</option>
+          <option>Haul Road</option><option>Coal Quality</option></select></div>
+        <div><label for="f-loc">Location</label><select id="f-loc">
+          <option>All</option><option>ABC Patch</option><option>XYZ Patch</option>
+          <option>Haul Road A</option><option>Haul Road B</option><option>MDP Junction</option>
+          <option>Stockyard 1</option><option>Siding 1</option><option>Siding 2</option></select></div>
+        <div class="reset"><button type="button" id="f-reset">Reset</button></div>
+        <div id="custom-dates" hidden>
+          <div><label for="f-from">From</label><input type="date" id="f-from"></div>
+          <div><label for="f-to">To</label><input type="date" id="f-to"></div>
+        </div>
+      </div>
+
+      <div id="loading">Loading analytics...</div>
+
+      <div id="content" hidden>
+        <!-- 2. KPI cards -->
+        <div class="cards">
+          <div class="card"><div class="n" id="k-total">-</div><div class="t">Total Exceptions</div><div class="s" id="k-total-sub"></div></div>
+          <div class="card"><div class="n" id="k-impact">-</div><div class="t">Total Impact Minutes</div><div class="s" id="k-impact-sub"></div></div>
+          <div class="card"><div class="n" id="k-avg">-</div><div class="t">Average Impact per Exception</div><div class="s" id="k-avg-sub"></div></div>
+          <div class="card"><div class="n" id="k-start">-</div><div class="t">Average Time to Start</div><div class="s" id="k-start-sub"></div></div>
+          <div class="card"><div class="n" id="k-resolve">-</div><div class="t">Average Time to Resolve</div><div class="s" id="k-resolve-sub"></div></div>
+          <div class="card"><div class="n" id="k-reopened">-</div><div class="t">Reopened Exceptions</div><div class="s" id="k-reopened-sub"></div></div>
+        </div>
+
+        <!-- 3. Management attention -->
+        <h2>Management Attention</h2>
+        <div class="panel">
+          <ul id="attention"></ul>
+          <p class="note">Facts taken directly from the filtered data. No prediction and no advice.</p>
+        </div>
+
+        <!-- 4. Trend charts -->
+        <h2>Trends</h2>
+        <div class="charts">
+          <div class="panel"><h3 id="t-created">Exceptions Created Over Time</h3><div class="chartbox"><canvas id="c-created"></canvas></div></div>
+          <div class="panel"><h3 id="t-impact">Impact Minutes Over Time</h3><div class="chartbox"><canvas id="c-impact"></canvas></div></div>
+          <div class="panel"><h3>Impact Minutes by Category</h3><div class="chartbox"><canvas id="c-cat"></canvas></div></div>
+          <div class="panel"><h3>Impact Minutes by Location</h3><div class="chartbox"><canvas id="c-loc"></canvas></div></div>
+          <div class="panel"><h3>Exceptions by Shift</h3><div class="chartbox"><canvas id="c-shift"></canvas></div></div>
+          <div class="panel"><h3>Top Issue Types (by number of exceptions)</h3><div class="chartbox"><canvas id="c-issue"></canvas></div></div>
+        </div>
+
+        <!-- 5. Hotspots -->
+        <h2>Operational Hotspots</h2>
+        <div class="hotlist" id="hotspots"></div>
+        <p class="note">Top 5 category and location combinations by total impact minutes.</p>
+
+        <!-- 6. Recurring constraints -->
+        <h2>Recurring Operational Constraints</h2>
+        <div class="panel">
+          <div class="empty" id="constraints-empty" hidden>No exceptions match these filters.</div>
+          <table id="constraints-table">
+            <thead><tr>
+              <th>Category</th><th>Issue Type</th><th>Location</th><th class="n">Exception Count</th>
+              <th class="n">Total Impact Minutes</th><th class="n">Average Impact Minutes</th>
+              <th class="n">Resolved Count</th><th class="n">Reopened Count</th><th>Last Occurrence</th>
+            </tr></thead>
+            <tbody id="constraints-body"></tbody>
+          </table>
+          <button type="button" class="linkbtn" id="constraints-more" hidden></button>
+          <p class="note">Grouped by category, issue type and location. Sorted by total impact minutes, then exception count. Top 15 shown by default.</p>
+        </div>
+
+        <!-- 7. Response and closure performance -->
+        <h2>Response &amp; Closure Performance</h2>
+        <div class="stats">
+          <div class="card"><div class="n" id="p-median-start">-</div><div class="t">Median Time to Start</div><div class="s" id="p-median-start-sub"></div></div>
+          <div class="card"><div class="n" id="p-median-resolve">-</div><div class="t">Median Time to Resolve</div><div class="s" id="p-median-resolve-sub"></div></div>
+          <div class="card"><div class="n" id="p-resolved">-</div><div class="t">Percentage Resolved</div><div class="s" id="p-resolved-sub"></div></div>
+          <div class="card"><div class="n" id="p-reopened">-</div><div class="t">Percentage Reopened</div><div class="s" id="p-reopened-sub"></div></div>
+        </div>
+
+        <!-- 8. Priority distribution -->
+        <h2>Priority Distribution</h2>
+        <div class="panel">
+          <table id="priority-table">
+            <thead><tr><th>Current priority</th><th class="n">Exceptions</th><th class="n">Total Impact Minutes</th></tr></thead>
+            <tbody id="priority-body"></tbody>
+          </table>
+        </div>
+        <h2>Priority Changes</h2>
+        <div class="stats">
+          <div class="card"><div class="n" id="priority-changes">-</div><div class="t">Exceptions with a priority change</div><div class="s" id="priority-changes-sub"></div></div>
+        </div>
+
+        <p class="note" style="margin-top:18px">
+          The period filters by the date each exception was created (your local time). Time to Start uses the current start time and
+          Time to Resolve uses the current resolve time of Resolved records. An exception that was reopened and worked again counts once;
+          its earlier cycles are not added up separately.
+        </p>
+      </div>
+    </div>
+  </main>
+  <footer>Training prototype &ndash; all data is made up</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="analytics.js"></script>
+</body>
+</html>
