@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MineShift Command - Dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #eef2f8;
+           color: #0b1f44; font-size: 18px; }
+    header { background: #0b2a5b; color: #fff; padding: 16px; }
+    header .brand { font-size: 22px; font-weight: bold; }
+    nav { margin-top: 8px; }
+    nav a { color: #fff; font-weight: bold; text-decoration: underline; font-size: 16px; padding: 8px 0; display: inline-block; }
+    main { max-width: 760px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 24px; margin: 8px 0 16px; }
+    h2 { font-size: 20px; margin: 24px 0 8px; }
+    .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .card { background: #fff; border: 2px solid #0b2a5b; border-radius: 12px; padding: 14px; }
+    .card .n { font-size: 34px; font-weight: bold; }
+    .card .t { font-size: 15px; }
+    .card.high { border-color: #dc2626; }
+    .card.high .n { color: #b91c1c; }
+    .panel { background: #fff; border-radius: 12px; padding: 12px; border: 1px solid #c7d2e5; }
+    .chartbox { position: relative; height: 260px; }
+    .item { border-top: 1px solid #d5ddec; padding: 12px 0; }
+    .item:first-child { border-top: 0; }
+    .item .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-weight: bold; }
+    .item .meta { font-size: 15px; color: #33466b; margin-top: 4px; }
+    .item .desc { margin-top: 4px; font-size: 16px; word-wrap: break-word; }
+    .badge { padding: 4px 10px; border-radius: 999px; font-size: 14px; font-weight: bold; white-space: nowrap; }
+    .badge.High { background: #dc2626; color: #fff; }
+    .badge.Medium { background: #f59e0b; color: #1f1300; }
+    .badge.Low { background: #d1d5db; color: #1f2937; }
+    #msg { padding: 14px; border-radius: 10px; display: none; word-wrap: break-word; }
+    #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
+    #msg.info { display: block; background: #e0e7ff; color: #0b2a5b; border: 2px solid #0b2a5b; }
+    footer { text-align: center; padding: 20px 16px; font-size: 14px; color: #0b2a5b; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">MineShift Command</div>
+    <nav><a href="index.html">Add Shift Exception</a> &nbsp;|&nbsp; <a href="dashboard.html">Dashboard</a></nav>
+  </header>
+  <main>
+    <h1>Dashboard</h1>
+    <div id="msg" role="status"></div>
+
+    <div class="cards">
+      <div class="card"><div class="n" id="k-open">-</div><div class="t">Not resolved yet</div></div>
+      <div class="card high"><div class="n" id="k-high">-</div><div class="t">High urgency, not resolved</div></div>
+      <div class="card"><div class="n" id="k-min">-</div><div class="t">Impact minutes, last 14 days</div></div>
+      <div class="card"><div class="n" id="k-total">-</div><div class="t">Exceptions, last 14 days</div></div>
+    </div>
+
+    <h2>Impact minutes per day</h2>
+    <div class="panel"><div class="chartbox"><canvas id="chart"></canvas></div></div>
+
+    <h2>Latest exceptions</h2>
+    <div class="panel" id="list">Loading...</div>
+  </main>
+  <footer>Training prototype &ndash; all data is made up</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="config.js"></script>
+  <script>
+    var msg = document.getElementById("msg");
+    function fail(text) { msg.className = "err"; msg.textContent = text; }
+
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+    function dayKey(d) {
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    function render(rows) {
+      var now = new Date();
+      var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13);
+      var open = 0, high = 0, mins = 0, total = 0;
+      var days = [], byDay = {};
+      for (var i = 0; i < 14; i++) {
+        var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+        var k = dayKey(d);
+        days.push(k);
+        byDay[k] = { "Coal Despatch": 0, "Dust Suppression": 0 };
+      }
+      rows.forEach(function (r) {
+        if (r.status !== "Resolved") {
+          open++;
+          if (r.urgency === "High") high++;
+        }
+        var c = new Date(r.created_at);
+        if (c >= start) {
+          total++;
+          mins += r.impact_minutes || 0;
+          var b = byDay[dayKey(c)];
+          if (b && b[r.category] !== undefined) b[r.category] += r.impact_minutes || 0;
+        }
+      });
+      document.getElementById("k-open").textContent = open;
+      document.getElementById("k-high").textContent = high;
+      document.getElementById("k-min").textContent = mins;
+      document.getElementById("k-total").textContent = total;
+
+      new Chart(document.getElementById("chart"), {
+        type: "bar",
+        data: {
+          labels: days.map(function (k) { return k.slice(8) + "/" + k.slice(5, 7); }),
+          datasets: [
+            { label: "Coal Despatch", backgroundColor: "#0b2a5b",
+              data: days.map(function (k) { return byDay[k]["Coal Despatch"]; }) },
+            { label: "Dust Suppression", backgroundColor: "#8aa4d6",
+              data: days.map(function (k) { return byDay[k]["Dust Suppression"]; }) }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: "Minutes" } } }
+        }
+      });
+
+      var list = document.getElementById("list");
+      list.textContent = "";
+      if (!rows.length) { list.textContent = "No exceptions recorded yet."; return; }
+      rows.slice(0, 10).forEach(function (r) {
+        var item = el("div", "item");
+        var top = el("div", "top");
+        top.appendChild(el("span", "", r.category + " - " + r.issue_type));
+        top.appendChild(el("span", "badge " + r.urgency, r.urgency));
+        item.appendChild(top);
+        item.appendChild(el("div", "meta", new Date(r.created_at).toLocaleDateString() + " | " +
+          r.shift + " shift | " + r.location + " | " + r.impact_minutes + " min | " + r.status));
+        item.appendChild(el("div", "desc", r.description || ""));
+        list.appendChild(item);
+      });
+    }
+
+    (async function () {
+      try {
+        var ready = (window.SUPABASE_URL || "").indexOf("PASTE") === -1 &&
+                    (window.SUPABASE_PUBLISHABLE_KEY || "").indexOf("sb_publishable_") === 0;
+        if (!ready) throw new Error("Database settings in config.js are not filled in yet.");
+        if (!window.Chart) throw new Error("The chart library could not be loaded.");
+        var db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
+        var res = await db.from("shift_exceptions")
+          .select("created_at,shift,location,category,issue_type,description,impact_minutes,urgency,status")
+          .order("created_at", { ascending: false }).limit(1000);
+        if (res.error) throw new Error(res.error.message);
+        render(res.data || []);
+      } catch (e) {
+        document.getElementById("list").textContent = "";
+        fail("Sorry, the dashboard could not load. Error: " + e.message);
+      }
+    })();
+  </script>
+</body>
+</html>
