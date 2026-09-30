@@ -287,17 +287,36 @@
     function isMyClosureRequest(r) { return closurePending(r) && r.closure_requested_by === myId; }
 
     // ---------------------------------------------------------------- data
+    // The database sends at most 1000 rows per request, however large .limit() is. So every bulk read
+    // is fetched in pages of 1000 (.range) until a page comes back short, so no row is silently left out.
+    // makeQuery() must return a fresh query with a stable order (a unique last key such as id), so the
+    // pages never repeat or skip a row.
+    var PAGE = 1000;
+    async function fetchAll(makeQuery) {
+      var all = [], from = 0;
+      for (;;) {
+        var res = await makeQuery().range(from, from + PAGE - 1);
+        if (res.error) throw new Error(res.error.message);
+        var data = res.data || [];
+        all = all.concat(data);
+        if (data.length < PAGE) return all;
+        from += PAGE;
+      }
+    }
+
     async function loadAll() {
-      var ex = await MineShift.db.from("shift_exceptions").select(COLS)
-        .order("created_at", { ascending: false }).limit(1000);
-      if (ex.error) throw new Error(ex.error.message);
-      allRows = ex.data || [];
-      var rm = await MineShift.db.from("exception_remarks")
-        .select("id,exception_id,kind,body,author_name,author_role,created_at")
-        .order("created_at", { ascending: true }).limit(5000);
-      if (rm.error) throw new Error(rm.error.message);
+      var ex = await fetchAll(function () {
+        return MineShift.db.from("shift_exceptions").select(COLS)
+          .order("created_at", { ascending: false }).order("id", { ascending: false });
+      });
+      var rm = await fetchAll(function () {
+        return MineShift.db.from("exception_remarks")
+          .select("id,exception_id,kind,body,author_name,author_role,created_at")
+          .order("created_at", { ascending: true }).order("id", { ascending: true });
+      });
+      allRows = ex;
       remarksBy = {};
-      (rm.data || []).forEach(function (m) {
+      rm.forEach(function (m) {
         // Overmen never see management remarks (the database also hides them).
         if (access.role === "overman" && m.kind !== "operational") return;
         (remarksBy[m.exception_id] = remarksBy[m.exception_id] || []).push(m);

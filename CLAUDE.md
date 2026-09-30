@@ -260,6 +260,17 @@
   builder, what was built, what works, known problems, next step). Then
   commit and push.
 
+## Maintenance notes
+- Dashboard pagination fix (bug above 1,000 rows): the database returns at most 1,000
+  rows per request, even if the code asks for more. dashboard.html used to read
+  the exceptions with a limit of 1,000 and the remarks with a limit of 5,000, so
+  with more rows it silently worked on only the first 1,000 (wrong cards, Top 3,
+  chart, OVERDUE, list, and missing remarks). Fix: both bulk reads now use
+  repeated 1,000-row reads (.range) in a stable order (created_at, then id)
+  until a page comes back short, so the dashboard uses ALL matching rows. The
+  per-record History read is unchanged (it is one record at a time). Nothing
+  else changed: no database, security, role or rule change.
+
 ## Our tool (filled in during Phase 1)
 - Team:
 - Tool name: MineShift Command
