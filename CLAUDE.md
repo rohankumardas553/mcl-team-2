@@ -72,12 +72,13 @@
 
 ## Our tool (filled in during Phase 1)
 - Team:
-- Tool name:
-- Problem:
-- Who records / who decides:
-- Table name and columns:
+- Tool name: MineShift Command
+- Problem: Shift problems in Coal Despatch and Dust Suppression are not recorded in one place.
+- Who records / who decides: Shift staff record; shift managers decide (to confirm).
+- Table name and columns: shift_exceptions - id, created_at, shift, location, category, issue_type, description, impact_minutes, urgency, status, resolved_at
 - Pages: index.html = entry page; dashboard.html = dashboard
 
 ## Progress Log (newest entry at the bottom)
 - Phase 0 (starter): placeholder index.html, config.js without settings and
   this CLAUDE.md. Next: Phase 1 - the table and the entry page.
+- Phase 1 (Claude): entry page index.html (Add Shift Exception) for Coal Despatch and Dust Suppression only; database/01-setup.sql (non-destructive, adds 12 demo rows). Works: not yet tested live. Known problems: config.js still has placeholder URL and key. Next: Data Keeper runs 01-setup.sql; team fills config.js; then test on live site.
