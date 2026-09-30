@@ -9,6 +9,7 @@
     :root { --navy: #0b2a5b; --navy-dark: #071c40; --ink: #0b1f44; --line: #c7d2e5; --bg: #eef2f8; }
     body { margin: 0; font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif; background: var(--bg);
            color: var(--ink); font-size: 18px; line-height: 1.4; }
+    [hidden] { display: none !important; }
 
     /* Shared header (same on every page) */
     header { background: var(--navy-dark); color: #fff; border-bottom: 4px solid #f59e0b; }
@@ -17,11 +18,20 @@
     .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: .3px; }
     .mark { width: 38px; height: 38px; border-radius: 9px; background: #fff; color: var(--navy);
             display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
+    .right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
     nav { display: flex; gap: 6px; }
     nav a { color: #fff; text-decoration: none; font-weight: 600; font-size: 16px; padding: 10px 16px;
             min-height: 44px; display: inline-flex; align-items: center; border-radius: 10px; }
     nav a:hover { background: rgba(255,255,255,.14); }
     nav a.active { background: #fff; color: var(--navy); }
+    .who { display: flex; align-items: center; gap: 12px; }
+    .who-text { display: flex; flex-direction: column; line-height: 1.2; text-align: right; }
+    .who-name { font-weight: 700; font-size: 15px; }
+    .who-role { font-size: 13px; color: #c7d2e5; }
+    .who-out { min-height: 44px; padding: 0 16px; font: inherit; font-size: 15px; font-weight: 700; color: #fff;
+               background: transparent; border: 2px solid rgba(255,255,255,.6); border-radius: 10px; cursor: pointer; }
+    .who-out:hover { background: rgba(255,255,255,.14); }
+    .who-out:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
 
     main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 8px; }
     .title h1 { font-size: 28px; margin: 4px 0 4px; }
@@ -33,6 +43,13 @@
     .panel { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px;
              box-shadow: 0 2px 8px rgba(11, 42, 91, .08); }
 
+    /* Overman view switch */
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tabs button { flex: 1; min-height: 56px; font: inherit; font-weight: 700; color: var(--navy); background: #fff;
+                   border: 2px solid var(--navy); border-radius: 12px; cursor: pointer; }
+    .tabs button[aria-pressed="true"] { background: var(--navy); color: #fff; }
+    .tabs button:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+
     /* Filters */
     .filters { display: grid; grid-template-columns: 1fr; gap: 10px; background: #fff; padding: 14px;
                border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 2px 8px rgba(11, 42, 91, .08); }
@@ -43,7 +60,7 @@
     .reset button { width: 100%; min-height: 56px; font: inherit; font-weight: 700; color: var(--navy);
                     background: #fff; border: 2px solid var(--navy); border-radius: 12px; cursor: pointer; }
     .reset button:hover { background: var(--navy); color: #fff; }
-    .reset button:focus-visible, .act:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+    .reset button:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
 
     /* KPI cards */
     .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
@@ -56,14 +73,19 @@
 
     .col { min-width: 0; }
     .chartbox { position: relative; height: 300px; }
+    .summary { margin: 14px 0 0; font-weight: 700; color: #33466b; }
 
-    /* Exception rows */
+    /* Exception cards */
     .item { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: #fff; }
     .item:last-child { margin-bottom: 0; }
     .item.overdue { border-color: #dc2626; border-left: 6px solid #dc2626; background: #fff8f8; }
     .item .top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; font-weight: 700; font-size: 18px; }
     .item .meta { font-size: 15px; color: #33466b; margin-top: 4px; }
-    .item .desc { margin-top: 4px; font-size: 16px; word-wrap: break-word; }
+    .item .desc { margin-top: 6px; font-size: 16px; word-wrap: break-word; }
+    .item .line { margin-top: 6px; font-size: 15px; color: #33466b; }
+    .item .line b { color: var(--ink); }
+    .prio { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: #f3f6fb; font-size: 15px; }
+    .prio .row { display: flex; flex-wrap: wrap; gap: 4px 16px; }
     .reason { margin-top: 6px; font-size: 16px; font-weight: 700; }
     .badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .badge { padding: 4px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; white-space: nowrap; }
@@ -71,14 +93,58 @@
     .badge.Medium { background: #f59e0b; color: #1f1300; }
     .badge.Low { background: #d1d5db; color: #1f2937; }
     .badge.overdue { background: #fff; color: #dc2626; border: 2px solid #dc2626; }
+    .badge.st-Open { background: #fff; color: var(--navy); border: 2px solid var(--navy); }
+    .badge.st-In { background: #dbeafe; color: #1e3a8a; }
+    .badge.st-Resolved { background: #dcfce7; color: #14532d; }
+    .pill { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 999px; font-size: 15px; font-weight: 700;
+            background: #fff7ed; color: #9a3412; border: 2px solid #f59e0b; }
     .rank { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%;
             background: var(--navy); color: #fff; font-weight: 700; margin-right: 8px; }
-    .act { width: 100%; margin-top: 10px; min-height: 58px; font: inherit; font-size: 20px; font-weight: 700; color: #fff;
-           background: var(--navy); border: 0; border-radius: 12px; cursor: pointer; }
+
+    /* Actions and forms */
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .act { flex: 1 1 100%; min-height: 56px; font: inherit; font-size: 18px; font-weight: 700; color: #fff;
+           background: var(--navy); border: 2px solid var(--navy); border-radius: 12px; cursor: pointer; padding: 0 12px; }
     .act:hover { background: var(--navy-dark); }
-    .act:disabled { opacity: .6; }
+    .act.secondary { background: #fff; color: var(--navy); }
+    .act.secondary:hover { background: #eef2f8; }
+    .act.danger { background: #fff; color: #b91c1c; border-color: #dc2626; }
+    .act.danger:hover { background: #fee2e2; }
+    .act:disabled { opacity: .55; cursor: not-allowed; }
+    .act:focus-visible, .formbox button:focus-visible, summary:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+    .await-note { flex: 1 1 100%; padding: 10px 12px; border-radius: 10px; background: #fff7ed; color: #9a3412;
+                  border: 2px dashed #f59e0b; font-size: 15px; font-weight: 700; }
+    .lock-note { margin-top: 6px; font-size: 14px; color: #7f1d1d; }
+    .formbox { margin-top: 10px; padding: 12px; border: 2px dashed var(--navy); border-radius: 12px; background: #f8fafd; }
+    .formbox h3 { margin: 0 0 8px; font-size: 16px; }
+    .formbox label { display: block; font-weight: 700; margin: 8px 0 6px; font-size: 16px; }
+    .formbox select, .formbox textarea { width: 100%; font: inherit; padding: 12px; color: var(--ink);
+             border: 2px solid var(--line); border-radius: 10px; background: #fff; min-height: 52px; }
+    .formbox textarea { min-height: 96px; resize: vertical; }
+    .formbox select:focus, .formbox textarea:focus { outline: 3px solid rgba(11, 42, 91, .35); border-color: var(--navy); }
+    .formbox .hint { font-size: 14px; color: #4b5d80; margin-top: 4px; }
+    .formbox .buttons { display: flex; gap: 8px; margin-top: 10px; }
+    .formbox .buttons button { flex: 1; min-height: 54px; font: inherit; font-size: 17px; font-weight: 700; border-radius: 12px; cursor: pointer; }
+    .formbox .go { background: var(--navy); color: #fff; border: 2px solid var(--navy); }
+    .formbox .cancel { background: #fff; color: var(--navy); border: 2px solid var(--navy); }
+    .formbox button:disabled { opacity: .55; }
     .inline-err { margin-top: 8px; padding: 10px; border-radius: 10px; background: #fee2e2; color: #7f1d1d;
                   border: 2px solid #dc2626; font-size: 16px; word-wrap: break-word; }
+
+    /* Remarks and history */
+    details.sec { margin-top: 10px; border-top: 1px solid #e3e9f4; padding-top: 8px; }
+    details.sec > summary { cursor: pointer; font-weight: 700; font-size: 16px; min-height: 40px; display: flex; align-items: center; }
+    .remark { padding: 8px 0; border-top: 1px solid #eef2f8; font-size: 16px; word-wrap: break-word; }
+    .remark:first-of-type { border-top: 0; }
+    .remark .who2 { font-size: 14px; color: #33466b; }
+    .kind { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700;
+            background: #ede9fe; color: #4c1d95; }
+    .hist-row { padding: 8px 0; border-top: 1px solid #eef2f8; font-size: 15px; word-wrap: break-word; }
+    .hist-row:first-of-type { border-top: 0; }
+    .hist-row .a { font-weight: 700; }
+    .hist-row .t { color: #4b5d80; font-size: 13px; }
+    .empty { color: #4b5d80; font-size: 15px; }
+
     .why p { margin: 8px 0; font-size: 16px; }
 
     #toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 20;
@@ -94,6 +160,8 @@
     @media (min-width: 700px) {
       .filters { grid-template-columns: repeat(3, 1fr) auto; align-items: end; }
       .reset button { width: auto; padding: 0 24px; }
+      .act { flex: 1 1 auto; }
+      .tabs button { max-width: 260px; }
     }
     @media (min-width: 1000px) {
       main { padding: 24px; }
@@ -102,9 +170,9 @@
       .card { padding: 20px; }
       .card .n { font-size: 56px; }
       .card .t { font-size: 18px; }
-      .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+      .layout.two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
       .chartbox { height: 360px; }
-      #list { max-height: 900px; overflow-y: auto; }
+      #list { max-height: 1100px; overflow-y: auto; }
     }
   </style>
 </head>
@@ -112,40 +180,45 @@
   <header>
     <div class="bar">
       <div class="brand"><span class="mark">MS</span>MineShift Command</div>
-      <nav>
-        <a href="index.html">Add Shift Exception</a>
-        <a class="active" href="dashboard.html">Dashboard</a>
-      </nav>
+      <div class="right">
+        <nav id="nav"></nav>
+        <div class="who" id="who"></div>
+      </div>
     </div>
   </header>
   <main>
     <div class="title">
       <h1>Dashboard</h1>
-      <p>What needs action first on this shift. Use the filters to focus on one category, shift or location.</p>
+      <p id="subtitle">Loading your dashboard...</p>
     </div>
     <div id="msg" role="status"></div>
 
-    <div class="filters">
+    <div class="tabs" id="tabs" hidden>
+      <button type="button" id="tab-active" aria-pressed="true">Active exceptions</button>
+      <button type="button" id="tab-history" aria-pressed="false">My history</button>
+    </div>
+
+    <div class="filters" id="filters">
       <div><label for="f-cat">Category</label><select id="f-cat">
         <option>All</option><option>Coal Despatch</option><option>Dust Suppression</option>
         <option>Haul Road</option><option>Coal Quality</option></select></div>
       <div><label for="f-shift">Shift</label><select id="f-shift">
         <option>All</option><option>First</option><option>Second</option><option>Night</option></select></div>
       <div><label for="f-loc">Location</label><select id="f-loc">
-        <option>All</option><option>Coal Face A</option><option>Coal Face B</option>
-        <option>Haul Road A</option><option>Haul Road B</option><option>Junction A</option>
-        <option>Stockyard A</option><option>Siding A</option><option>Siding B</option></select></div>
+        <option>All</option><option>ABC Patch</option><option>XYZ Patch</option>
+        <option>Haul Road A</option><option>Haul Road B</option><option>MDP Junction</option>
+        <option>Stockyard 1</option><option>Siding 1</option><option>Siding 2</option></select></div>
       <div class="reset"><button type="button" id="f-reset">Show all</button></div>
     </div>
 
-    <div class="cards">
+    <div class="cards" id="cards" hidden>
       <div class="card"><div class="n" id="k-open">-</div><div class="t">Open Exceptions</div></div>
       <div class="card high"><div class="n" id="k-high">-</div><div class="t">High Priority</div></div>
       <div class="card"><div class="n" id="k-min">-</div><div class="t">Active Impact Minutes</div></div>
     </div>
 
-    <div class="layout">
-      <div class="col">
+    <div class="layout two" id="layout">
+      <div class="col" id="col-left" hidden>
         <h2>Top 3 &ndash; Act Now</h2>
         <div class="panel" id="top3">Loading...</div>
 
@@ -153,7 +226,8 @@
         <div class="panel"><div class="chartbox"><canvas id="chart"></canvas></div></div>
       </div>
       <div class="col">
-        <h2>Exceptions</h2>
+        <h2 id="list-title">Exceptions</h2>
+        <p class="summary" id="summary" hidden></p>
         <div class="panel" id="list">Loading...</div>
       </div>
     </div>
@@ -171,6 +245,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="config.js"></script>
+  <script src="auth.js"></script>
   <script>
     var msg = document.getElementById("msg");
     function fail(text) { msg.className = "err"; msg.textContent = text; }
@@ -178,35 +253,86 @@
     function el(tag, cls, text) {
       var e = document.createElement(tag);
       if (cls) e.className = cls;
-      if (text !== undefined) e.textContent = text;
+      if (text !== undefined && text !== null) e.textContent = text;
       return e;
     }
-
-    var db = null, allRows = [], chart = null;
-
-    function isOverdue(r) {
-      return r.urgency === "High" && r.status !== "Resolved" &&
-             (Date.now() - new Date(r.created_at).getTime()) > 30 * 60 * 1000;
+    function fmtTime(iso) {
+      if (!iso) return "";
+      var d = new Date(iso);
+      return d.toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     }
+    var ROLE_RANK = { overman: 1, shift_incharge: 2, manager: 3, project_officer: 4, general_manager: 5 };
+    function roleLabel(r) { var x = MineShift.ROLES[r]; return x ? x.label : (r || "unknown"); }
 
+    var COLS = "id,created_at,shift,location,category,issue_type,description,impact_minutes,status," +
+      "reported_priority,current_priority,created_by,created_by_name,created_by_role," +
+      "priority_changed_by_name,priority_changed_by_role,priority_changed_at,priority_change_reason," +
+      "started_by_name,started_at,closure_requested_by,closure_requested_by_name,closure_requested_at," +
+      "resolved_by_name,resolved_at";
+
+    var access = null, myId = null;
+    var allRows = [], remarksBy = {}, chart = null, view = "active";
     var CATS = ["Coal Despatch", "Dust Suppression", "Haul Road", "Coal Quality"];
 
-    function activeByCategory(rows) {
+    function can(action) { return MineShift.can(action, access); }
+    function isManagement() { return can("view_analytics"); }
+
+    // OVERDUE: current priority High, not Resolved, created more than 30 minutes ago.
+    function isOverdue(r) {
+      return r.current_priority === "High" && r.status !== "Resolved" &&
+             (Date.now() - new Date(r.created_at).getTime()) > 30 * 60 * 1000;
+    }
+    function closurePending(r) { return r.status === "In progress" && !!r.closure_requested_at; }
+    // Maker-checker: the person who asked for the closure cannot confirm or decline it.
+    function isMyClosureRequest(r) { return closurePending(r) && r.closure_requested_by === myId; }
+
+    // ---------------------------------------------------------------- data
+    async function loadAll() {
+      var ex = await MineShift.db.from("shift_exceptions").select(COLS)
+        .order("created_at", { ascending: false }).limit(1000);
+      if (ex.error) throw new Error(ex.error.message);
+      allRows = ex.data || [];
+      var rm = await MineShift.db.from("exception_remarks")
+        .select("id,exception_id,kind,body,author_name,author_role,created_at")
+        .order("created_at", { ascending: true }).limit(5000);
+      if (rm.error) throw new Error(rm.error.message);
+      remarksBy = {};
+      (rm.data || []).forEach(function (m) {
+        // Overmen never see management remarks (the database also hides them).
+        if (access.role === "overman" && m.kind !== "operational") return;
+        (remarksBy[m.exception_id] = remarksBy[m.exception_id] || []).push(m);
+      });
+    }
+
+    function filtered() {
+      var cat = document.getElementById("f-cat").value;
+      var shift = document.getElementById("f-shift").value;
+      var loc = document.getElementById("f-loc").value;
+      return allRows.filter(function (r) {
+        if (!isManagement()) {
+          // Overman: active exceptions, or the Resolved ones he created (My history).
+          if (view === "active" && r.status === "Resolved") return false;
+          if (view === "history" && !(r.status === "Resolved" && r.created_by === myId)) return false;
+        }
+        return (cat === "All" || r.category === cat) &&
+               (shift === "All" || r.shift === shift) &&
+               (loc === "All" || r.location === loc);
+      });
+    }
+
+    // ---------------------------------------------------------------- analytics (Shift In-Charge and above)
+    function drawChart(rows) {
+      if (!window.Chart) {
+        document.querySelector(".chartbox").textContent = "The chart could not be loaded (the chart library did not load).";
+        return;
+      }
       var sums = {};
       CATS.forEach(function (c) { sums[c] = 0; });
       rows.forEach(function (r) {
         if (r.status !== "Resolved" && sums[r.category] !== undefined) sums[r.category] += r.impact_minutes || 0;
       });
-      return CATS.map(function (c) { return sums[c]; });
-    }
-
-    function drawChart(rows) {
-      var data = activeByCategory(rows);
-      if (chart) {
-        chart.data.datasets[0].data = data;
-        chart.update("none");
-        return;
-      }
+      var data = CATS.map(function (c) { return sums[c]; });
+      if (chart) { chart.data.datasets[0].data = data; chart.update("none"); return; }
       chart = new Chart(document.getElementById("chart"), {
         type: "bar",
         data: {
@@ -222,14 +348,16 @@
       });
     }
 
-    var URG = { High: 0, Medium: 1, Low: 2 };
+    var PRI = { High: 0, Medium: 1, Low: 2 };
+    function priOrder(p) { return PRI[p] === undefined ? 3 : PRI[p]; }
 
     function renderTop3(rows) {
       var box = document.getElementById("top3");
       box.textContent = "";
+      // 1) High before Medium before Low  2) more impact minutes first  3) older first
       var top = rows.filter(function (r) { return r.status !== "Resolved"; })
         .sort(function (a, b) {
-          return ((URG[a.urgency] === undefined ? 3 : URG[a.urgency]) - (URG[b.urgency] === undefined ? 3 : URG[b.urgency])) ||
+          return (priOrder(a.current_priority) - priOrder(b.current_priority)) ||
                  ((b.impact_minutes || 0) - (a.impact_minutes || 0)) ||
                  (new Date(a.created_at) - new Date(b.created_at));
         }).slice(0, 3);
@@ -243,75 +371,30 @@
         head.appendChild(left);
         var badges = el("span", "badges");
         if (isOverdue(r)) badges.appendChild(el("span", "badge overdue", "OVERDUE"));
-        badges.appendChild(el("span", "badge " + r.urgency, r.urgency));
+        badges.appendChild(el("span", "badge " + r.current_priority, r.current_priority));
         head.appendChild(badges);
         item.appendChild(head);
         item.appendChild(el("div", "meta", r.location + " | " + r.impact_minutes + " min | " + r.status));
-        item.appendChild(el("div", "reason", r.urgency + " urgency \u00b7 " + r.impact_minutes + " min impact"));
+        item.appendChild(el("div", "reason", r.current_priority + " priority · " + r.impact_minutes + " min impact"));
         box.appendChild(item);
       });
     }
 
-    function filtered() {
-      var cat = document.getElementById("f-cat").value;
-      var shift = document.getElementById("f-shift").value;
-      var loc = document.getElementById("f-loc").value;
-      return allRows.filter(function (r) {
-        return (cat === "All" || r.category === cat) &&
-               (shift === "All" || r.shift === shift) &&
-               (loc === "All" || r.location === loc);
-      });
-    }
-
-    function renderView() {
-      var rows = filtered();
-      renderTop3(rows);
-      drawChart(rows);
+    function renderCards(rows) {
       var open = 0, high = 0, mins = 0;
       rows.forEach(function (r) {
         if (r.status === "Open" || r.status === "In progress") open++;
         if (r.status !== "Resolved") {
           mins += r.impact_minutes || 0;
-          if (r.urgency === "High") high++;
+          if (r.current_priority === "High") high++;
         }
       });
       document.getElementById("k-open").textContent = open;
       document.getElementById("k-high").textContent = high;
       document.getElementById("k-min").textContent = mins;
-
-      var list = document.getElementById("list");
-      list.textContent = "";
-      if (!rows.length) { list.textContent = "No exceptions match these filters."; return; }
-      rows.forEach(function (r) {
-        var item = el("div", "item" + (isOverdue(r) ? " overdue" : ""));
-        var top = el("div", "top");
-        top.appendChild(el("span", "", r.category + " - " + r.issue_type));
-        var badges = el("span", "badges");
-        if (isOverdue(r)) badges.appendChild(el("span", "badge overdue", "OVERDUE"));
-        badges.appendChild(el("span", "badge " + r.urgency, r.urgency));
-        top.appendChild(badges);
-        item.appendChild(top);
-        item.appendChild(el("div", "meta", new Date(r.created_at).toLocaleDateString() + " | " +
-          r.shift + " shift | " + r.location + " | " + r.impact_minutes + " min | " + r.status));
-        item.appendChild(el("div", "desc", r.description || ""));
-        if (r.status === "Open" || r.status === "In progress") {
-          var btn = el("button", "act", r.status === "Open" ? "Start" : "Resolve");
-          btn.type = "button";
-          btn.addEventListener("click", function () { changeStatus(r, btn); });
-          item.appendChild(btn);
-        }
-        list.appendChild(item);
-      });
     }
 
-    async function loadRows() {
-      var res = await db.from("shift_exceptions")
-        .select("id,created_at,shift,location,category,issue_type,description,impact_minutes,urgency,status")
-        .order("created_at", { ascending: false }).limit(1000);
-      if (res.error) throw new Error(res.error.message);
-      allRows = res.data || [];
-    }
-
+    // ---------------------------------------------------------------- feedback
     var toastTimer = null;
     function toast(kind, text) {
       var t = document.getElementById("toast");
@@ -320,59 +403,374 @@
       clearTimeout(toastTimer);
       toastTimer = setTimeout(function () { t.className = ""; t.textContent = ""; }, 6000);
     }
+    function errorText(e) {
+      var text = "Sorry, that did not work. Error: " + e.message;
+      if (MineShift.isSessionError(e.message)) text += " Your sign-in may have ended. Please sign in again.";
+      return text;
+    }
+    function showItemError(item, text) {
+      var old = item.querySelector(".inline-err");
+      if (old) old.remove();
+      var note = el("div", "inline-err", text);
+      note.setAttribute("role", "alert");
+      var actions = item.querySelector(".actions");
+      if (actions) actions.after(note); else item.appendChild(note);
+    }
 
-    async function changeStatus(r, btn) {
+    // Runs a database function, then reloads everything. Returns true on success.
+    async function doRpc(item, btn, fn, args, okText) {
       var label = btn.textContent;
+      var old = item.querySelector(".inline-err");
+      if (old) old.remove();
       btn.disabled = true;
       btn.textContent = "Saving...";
       msg.className = ""; msg.textContent = "";
       try {
-        var change = r.status === "Open"
-          ? { from: "Open", values: { status: "In progress" } }
-          : { from: "In progress", values: { status: "Resolved", resolved_at: new Date().toISOString() } };
-        var res = await db.from("shift_exceptions").update(change.values)
-          .eq("id", r.id).eq("status", change.from).select("id");
+        var res = await MineShift.db.rpc(fn, args);
         if (res.error) throw new Error(res.error.message);
-        if (!res.data || !res.data.length) throw new Error("The database did not change this record (0 rows updated). Please tell the team.");
-        // Read the record back to be sure the change was really saved.
-        var check = await db.from("shift_exceptions").select("status").eq("id", r.id);
-        if (check.error) throw new Error(check.error.message);
-        var now = check.data && check.data[0];
-        if (!now || now.status !== change.values.status) {
-          throw new Error("The database still shows this record as '" + (now ? now.status : "missing") + "' after saving. Please tell the team.");
-        }
-        await loadRows();
+        await loadAll();
         renderView();
-        toast("ok", (r.issue_type || "Record") + " is now " + change.values.status + ".");
+        toast("ok", okText);
+        return true;
       } catch (e) {
-        var text = "Sorry, the status could not be changed. Error: " + e.message;
-        fail(text);
+        var text = errorText(e);
+        showItemError(item, text);
         toast("err", text);
-        var note = el("div", "inline-err", text);
-        note.setAttribute("role", "alert");
-        btn.parentNode.appendChild(note);
         btn.textContent = label;
         btn.disabled = false;
+        return false;
       }
+    }
+
+    // A small inline form: optional select, optional text box, Confirm and Cancel.
+    function openForm(item, cfg) {
+      var existing = item.querySelector(".formbox");
+      if (existing) existing.remove();
+      var box = el("div", "formbox");
+      box.appendChild(el("h3", "", cfg.title));
+      var sel = null, ta = null;
+      if (cfg.select) {
+        var l1 = el("label", "", cfg.select.label);
+        sel = document.createElement("select");
+        cfg.select.options.forEach(function (o) { sel.appendChild(el("option", "", o)); });
+        l1.appendChild(sel);
+        box.appendChild(l1);
+      }
+      if (cfg.text) {
+        var l2 = el("label", "", cfg.text.label);
+        ta = document.createElement("textarea");
+        ta.maxLength = cfg.text.max || 500;
+        l2.appendChild(ta);
+        box.appendChild(l2);
+        box.appendChild(el("div", "hint", "At least " + cfg.text.min + " characters."));
+      }
+      var errBox = el("div", "");
+      box.appendChild(errBox);
+      var row = el("div", "buttons");
+      var go = el("button", "go", cfg.submit);
+      go.type = "button";
+      var cancel = el("button", "cancel", "Cancel");
+      cancel.type = "button";
+      row.appendChild(go);
+      row.appendChild(cancel);
+      box.appendChild(row);
+      cancel.addEventListener("click", function () { box.remove(); });
+      go.addEventListener("click", async function () {
+        errBox.textContent = "";
+        var body = ta ? ta.value.trim() : "";
+        if (cfg.text && body.length < cfg.text.min) {
+          errBox.className = "inline-err";
+          errBox.textContent = "Please write at least " + cfg.text.min + " characters.";
+          return;
+        }
+        errBox.className = "";
+        var args = cfg.args(body, sel ? sel.value : null);
+        var ok = await doRpc(item, go, cfg.fn, args, cfg.ok);
+        if (!ok) { /* the error is shown on the card; keep the form open */ }
+      });
+      var actions = item.querySelector(".actions");
+      if (actions) actions.after(box); else item.appendChild(box);
+      if (ta) ta.focus(); else if (sel) sel.focus();
+    }
+
+    // ---------------------------------------------------------------- exception cards
+    function priorityBlock(r) {
+      var box = el("div", "prio");
+      var row = el("div", "row");
+      var a = el("span", "");
+      a.appendChild(document.createTextNode("Reported priority: "));
+      a.appendChild(el("b", "", r.reported_priority));
+      var b = el("span", "");
+      b.appendChild(document.createTextNode("Current priority: "));
+      b.appendChild(el("b", "", r.current_priority));
+      row.appendChild(a);
+      row.appendChild(b);
+      box.appendChild(row);
+      if (r.priority_changed_at) {
+        box.appendChild(el("div", "", "Last set by: " + (r.priority_changed_by_name || "unknown") +
+          " (" + roleLabel(r.priority_changed_by_role) + ")"));
+        box.appendChild(el("div", "", "Changed at: " + fmtTime(r.priority_changed_at)));
+        box.appendChild(el("div", "", "Reason: " + (r.priority_change_reason || "")));
+      } else {
+        box.appendChild(el("div", "", "Current priority is the originally reported priority."));
+      }
+      return box;
+    }
+
+    // Who last set the priority decides who may change it (the database is the judge).
+    function priorityLock(r) {
+      var setter = r.priority_changed_by_role || r.created_by_role;
+      var setterRank = ROLE_RANK[setter] || 0;
+      return { setter: setter, locked: access.rank < setterRank };
+    }
+
+    function remarksBlock(r) {
+      var list = remarksBy[r.id] || [];
+      var d = el("details", "sec");
+      if (list.length && list.length <= 3) d.open = true;
+      d.appendChild(el("summary", "", "Remarks (" + list.length + ")"));
+      if (!list.length) d.appendChild(el("div", "empty", "No remarks yet."));
+      list.forEach(function (m) {
+        var rm = el("div", "remark");
+        var who = el("div", "who2", m.author_name + " (" + roleLabel(m.author_role) + ") · " + fmtTime(m.created_at));
+        if (m.kind === "management") who.appendChild(el("span", "kind", "Management"));
+        rm.appendChild(who);
+        rm.appendChild(el("div", "", m.body));
+        d.appendChild(rm);
+      });
+      return d;
+    }
+
+    var ACTION_TEXT = {
+      created: "Created", started: "Started", closure_requested: "Closure requested",
+      closure_declined: "Closure declined", resolved: "Resolved", reopened: "Reopened",
+      priority_changed: "Priority changed", remark_operational: "Operational remark",
+      remark_management: "Management remark", legacy_imported: "Existing record imported",
+      location_renamed: "Location renamed", direct_change: "Changed directly"
+    };
+
+    function historyBlock(r) {
+      var d = el("details", "sec");
+      d.appendChild(el("summary", "", "History (oldest first)"));
+      var body = el("div", "");
+      d.appendChild(body);
+      var loaded = false;
+      d.addEventListener("toggle", async function () {
+        if (!d.open || loaded) return;
+        loaded = true;
+        body.textContent = "Loading history...";
+        try {
+          var res = await MineShift.db.from("exception_audit")
+            .select("id,created_at,action,actor_name,actor_role,old_value,new_value,note")
+            .eq("exception_id", r.id)
+            .order("created_at", { ascending: true });
+          if (res.error) throw new Error(res.error.message);
+          body.textContent = "";
+          if (!res.data || !res.data.length) { body.appendChild(el("div", "empty", "No history recorded.")); return; }
+          res.data.forEach(function (h) {
+            var row = el("div", "hist-row");
+            row.appendChild(el("div", "t", fmtTime(h.created_at)));
+            var who = (h.actor_name || "System") + (h.actor_role && h.actor_role !== "system" ? " (" + roleLabel(h.actor_role) + ")" : "");
+            var line = el("div", "");
+            line.appendChild(el("span", "a", ACTION_TEXT[h.action] || h.action));
+            line.appendChild(document.createTextNode(" · " + who));
+            row.appendChild(line);
+            if (h.old_value || h.new_value) {
+              row.appendChild(el("div", "", (h.old_value || "-") + "  →  " + (h.new_value || "-")));
+            }
+            if (h.note) row.appendChild(el("div", "", "Note: " + h.note));
+            body.appendChild(row);
+          });
+        } catch (e) {
+          loaded = false;
+          body.textContent = "";
+          body.appendChild(el("div", "inline-err", "Sorry, the history could not load. Error: " + e.message));
+        }
+      });
+      return d;
+    }
+
+    function actionButtons(item, r) {
+      var box = el("div", "actions");
+      function add(label, cls, handler, disabled) {
+        var b = el("button", "act" + (cls ? " " + cls : ""), label);
+        b.type = "button";
+        if (disabled) b.disabled = true;
+        b.addEventListener("click", function () { handler(b); });
+        box.appendChild(b);
+        return b;
+      }
+      var pending = closurePending(r);
+
+      if (r.status === "Open" && can("start")) {
+        add("Start", "", function (b) { doRpc(item, b, "start_exception", { p_id: r.id }, "Started."); });
+      }
+      if (r.status === "In progress" && !pending && can("request_closure")) {
+        add("Request closure", "", function () {
+          openForm(item, { title: "Request closure", fn: "request_closure", ok: "Closure requested.", submit: "Send request",
+            text: { label: "Closure note (what was done or verified)", min: 5 },
+            args: function (body) { return { p_id: r.id, p_note: body }; } });
+        });
+      }
+      if (isMyClosureRequest(r)) {
+        box.appendChild(el("div", "await-note", "Awaiting confirmation by another authorised officer."));
+      }
+      if (r.status === "In progress" && pending && !isMyClosureRequest(r) && can("decline_closure")) {
+        add("Decline closure", "danger", function () {
+          openForm(item, { title: "Decline the closure request", fn: "decline_closure", ok: "Closure request declined.", submit: "Decline",
+            text: { label: "Reason for declining", min: 5 },
+            args: function (body) { return { p_id: r.id, p_reason: body }; } });
+        });
+      }
+      if (r.status === "In progress" && can("resolve") && !isMyClosureRequest(r)) {
+        if (pending) {
+          add("Confirm Resolved", "", function (b) {
+            doRpc(item, b, "resolve_exception", { p_id: r.id, p_note: null }, "Resolved.");
+          });
+        } else {
+          add("Resolve", "", function () {
+            openForm(item, { title: "Resolve (no closure request exists)", fn: "resolve_exception", ok: "Resolved.", submit: "Resolve",
+              text: { label: "Resolution note", min: 5 },
+              args: function (body) { return { p_id: r.id, p_note: body }; } });
+          });
+        }
+      }
+      if (r.status === "Resolved" && can("reopen")) {
+        add("Reopen", "secondary", function () {
+          openForm(item, { title: "Reopen this exception", fn: "reopen_exception", ok: "Reopened.", submit: "Reopen",
+            text: { label: "Reason for reopening", min: 5 },
+            args: function (body) { return { p_id: r.id, p_reason: body }; } });
+        });
+      }
+      if (r.status !== "Resolved" && can("change_priority")) {
+        var lock = priorityLock(r);
+        add("Change priority", "secondary", function () {
+          var options = ["Low", "Medium", "High"].filter(function (p) { return p !== r.current_priority; });
+          openForm(item, { title: "Change priority (now " + r.current_priority + ")", fn: "change_priority", ok: "Priority changed.", submit: "Change priority",
+            select: { label: "New priority", options: options },
+            text: { label: "Reason for the change", min: 5 },
+            args: function (body, val) { return { p_id: r.id, p_new: val, p_reason: body }; } });
+        }, lock.locked);
+        if (lock.locked) {
+          box.appendChild(el("div", "lock-note", "Priority was last set by a " + roleLabel(lock.setter) +
+            ". Only a " + roleLabel(lock.setter) + " or higher can change it."));
+        }
+      }
+      var kind = can("remark_operational") ? "operational" : (can("remark_management") ? "management" : null);
+      var overmanBlocked = access.role === "overman" && r.status === "Resolved";
+      if (kind && !overmanBlocked) {
+        add(kind === "operational" ? "Add operational remark" : "Add management remark", "secondary", function () {
+          openForm(item, { title: kind === "operational" ? "Operational remark" : "Management remark", fn: "add_remark", ok: "Remark added.", submit: "Add remark",
+            text: { label: "Remark", min: 3, max: 1000 },
+            args: function (body) { return { p_id: r.id, p_kind: kind, p_body: body }; } });
+        });
+      }
+      return box;
+    }
+
+    function buildCard(r) {
+      var item = el("div", "item" + (isOverdue(r) ? " overdue" : ""));
+      item.setAttribute("data-id", r.id);
+      var top = el("div", "top");
+      top.appendChild(el("span", "", r.category + " - " + r.issue_type));
+      var badges = el("span", "badges");
+      if (isOverdue(r)) badges.appendChild(el("span", "badge overdue", "OVERDUE"));
+      badges.appendChild(el("span", "badge " + r.current_priority, r.current_priority));
+      badges.appendChild(el("span", "badge st-" + r.status.split(" ")[0], r.status));
+      top.appendChild(badges);
+      item.appendChild(top);
+      item.appendChild(el("div", "meta", fmtTime(r.created_at) + " | " + r.shift + " shift | " + r.location + " | " + r.impact_minutes + " min"));
+      item.appendChild(el("div", "line", "Reported by " + (r.created_by_name ? r.created_by_name + " (" + roleLabel(r.created_by_role) + ")" : "an earlier record (before login)") +
+        " · " + fmtTime(r.created_at)));
+      item.appendChild(el("div", "desc", r.description || ""));
+      item.appendChild(priorityBlock(r));
+      if (r.status === "In progress" && r.started_at) {
+        item.appendChild(el("div", "line", "Started by " + (r.started_by_name || "unknown") + " · " + fmtTime(r.started_at)));
+      }
+      if (closurePending(r)) {
+        item.appendChild(el("span", "pill", "Closure requested by " + (r.closure_requested_by_name || "unknown") +
+          " · " + fmtTime(r.closure_requested_at)));
+      }
+      if (r.status === "Resolved" && r.resolved_at) {
+        item.appendChild(el("div", "line", "Resolved by " + (r.resolved_by_name || "unknown") + " · " + fmtTime(r.resolved_at)));
+      }
+      item.appendChild(remarksBlock(r));
+      item.appendChild(actionButtons(item, r));
+      if (can("view_all_history")) item.appendChild(historyBlock(r));
+      return item;
+    }
+
+    function renderList(rows) {
+      var list = document.getElementById("list");
+      list.textContent = "";
+      var summary = document.getElementById("summary");
+      if (!isManagement()) {
+        summary.hidden = false;
+        summary.textContent = view === "active"
+          ? rows.length + " active exception" + (rows.length === 1 ? "" : "s")
+          : rows.length + " resolved exception" + (rows.length === 1 ? "" : "s") + " you created";
+      }
+      if (!rows.length) {
+        list.textContent = isManagement() ? "No exceptions match these filters."
+          : (view === "active" ? "No active exceptions match these filters." : "No resolved exceptions created by you match these filters.");
+        return;
+      }
+      rows.forEach(function (r) { list.appendChild(buildCard(r)); });
+    }
+
+    function renderView() {
+      var rows = filtered();
+      if (isManagement()) {
+        renderCards(rows);
+        renderTop3(rows);
+        drawChart(rows);
+      }
+      renderList(rows);
+    }
+
+    // ---------------------------------------------------------------- start-up
+    function setView(v) {
+      view = v;
+      document.getElementById("tab-active").setAttribute("aria-pressed", v === "active" ? "true" : "false");
+      document.getElementById("tab-history").setAttribute("aria-pressed", v === "history" ? "true" : "false");
+      document.getElementById("list-title").textContent = v === "active" ? "Active exceptions" : "My history";
+      renderView();
     }
 
     document.getElementById("f-reset").addEventListener("click", function () {
       ["f-cat", "f-shift", "f-loc"].forEach(function (id) { document.getElementById(id).value = "All"; });
       renderView();
     });
-
     ["f-cat", "f-shift", "f-loc"].forEach(function (id) {
       document.getElementById(id).addEventListener("change", renderView);
     });
+    document.getElementById("tab-active").addEventListener("click", function () { setView("active"); });
+    document.getElementById("tab-history").addEventListener("click", function () { setView("history"); });
 
     (async function () {
+      var ctx = await MineShift.start("dashboard");
+      if (!ctx) return;
+      access = ctx.access;
+      myId = ctx.session.user.id;
+
+      var layout = document.getElementById("layout");
+      if (isManagement()) {
+        document.getElementById("cards").hidden = false;
+        document.getElementById("col-left").hidden = false;
+        document.getElementById("subtitle").textContent = access.rank >= 3
+          ? "Watch the priorities, set them with a reason, and add management remarks."
+          : "What needs action first on this shift. Use the filters to focus on one category, shift or location.";
+        document.getElementById("list-title").textContent = "Exceptions";
+      } else {
+        // Overman / Supervisor: operational view only.
+        layout.className = "layout";
+        document.getElementById("tabs").hidden = false;
+        document.getElementById("subtitle").textContent =
+          "Your active exceptions. Start work, add remarks and request closure when the job is done.";
+        document.getElementById("list-title").textContent = "Active exceptions";
+      }
       try {
-        var ready = (window.SUPABASE_URL || "").indexOf("PASTE") === -1 &&
-                    (window.SUPABASE_PUBLISHABLE_KEY || "").indexOf("sb_publishable_") === 0;
-        if (!ready) throw new Error("Database settings in config.js are not filled in yet.");
-        if (!window.Chart) throw new Error("The chart library could not be loaded.");
-        db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
-        await loadRows();
+        await loadAll();
         renderView();
       } catch (e) {
         document.getElementById("list").textContent = "";
