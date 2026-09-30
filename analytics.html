@@ -355,8 +355,8 @@
         <!-- 9. Phase E: forecast readiness (data sufficiency only; no forecast) -->
         <h2>Forecast Readiness</h2>
         <div class="panel">
-          <p class="note" style="margin-top:0">Checks whether the filtered history is sufficient for <b>later</b> forecasting. No forecast is made on this page.
-            The states describe data sufficiency only, measured against prototype engineering thresholds (listed at the end of this section). They are not an operational rating.
+          <p class="note" style="margin-top:0">Checks whether the filtered historical dataset meets the prototype data-sufficiency requirements for attempting a <b>later</b> forecast. No forecast is made on this page.
+            The states describe data sufficiency only, measured against prototype engineering thresholds (listed at the end of this section). They are not an operational rating, and Ready does not mean the data is statistically validated or that a later forecast would be accurate or reliable.
             The date range filter limits the history that is assessed: choose Last 90 days or All time to assess more history.</p>
           <div class="ready-head" style="margin-top:12px"><h3>Overall Forecast Readiness</h3><span class="rbadge" id="r-overall-badge"></span></div>
           <ul class="rlist" id="r-overall-reasons"></ul>
@@ -405,7 +405,7 @@
 
         <div class="panel" style="margin-top:14px">
           <details class="thr">
-            <summary>Prototype engineering thresholds (data sufficiency, not operational thresholds)</summary>
+            <summary>Prototype engineering thresholds (data sufficiency, not operational or statistical thresholds)</summary>
             <table id="thr-table" style="margin-top:8px">
               <thead><tr><th>Measure</th><th>Not Ready when</th><th>Ready when</th></tr></thead>
               <tbody id="thr-body"></tbody>

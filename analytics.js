@@ -549,8 +549,10 @@
 
   // ==================================================================== Phase E: forecast readiness
   // A data-sufficiency check for LATER forecasting. It makes no forecast and gives no operational judgement.
-  // The states (Not Ready / Limited / Ready) describe only whether the filtered history is long, dense and
-  // complete enough. The numbers below are prototype ENGINEERING defaults, not operational thresholds.
+  // The states (Not Ready / Limited / Ready) describe only whether the filtered history meets the prototype
+  // data-sufficiency requirements for attempting a forecast. They do NOT mean the data is statistically
+  // validated, or that any later forecast would be accurate, reliable or of guaranteed quality.
+  // The numbers below are prototype ENGINEERING defaults, not operational or statistical thresholds.
   var READINESS = {
     general: { notReadySpan: 14, notReadyCount: 20, notReadyActive: 7, readySpan: 56, readyCount: 50, readyActive: 21, maxSharePct: 50 },
     start:   { notReadyObs: 10, readyObs: 30, readyPct: 50, readySpan: 28 },
