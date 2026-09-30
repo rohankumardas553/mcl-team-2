@@ -42,6 +42,10 @@
     .act { width: 100%; margin-top: 10px; min-height: 54px; font-size: 18px; font-weight: bold;
       background: #0b2a5b; color: #fff; border: 0; border-radius: 10px; }
     .act:disabled { opacity: .6; }
+    .why p { margin: 8px 0; font-size: 16px; }
+    .rank { display: inline-block; min-width: 30px; height: 30px; line-height: 30px; text-align: center;
+      border-radius: 50%; background: #0b2a5b; color: #fff; font-weight: bold; margin-right: 8px; }
+    .reason { margin-top: 4px; font-size: 16px; font-weight: bold; }
     #msg { padding: 14px; border-radius: 10px; display: none; word-wrap: break-word; }
     #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
     #msg.info { display: block; background: #e0e7ff; color: #0b2a5b; border: 2px solid #0b2a5b; }
@@ -57,16 +61,6 @@
     <h1>Dashboard</h1>
     <div id="msg" role="status"></div>
 
-    <div class="cards">
-      <div class="card"><div class="n" id="k-open">-</div><div class="t">Open Exceptions</div></div>
-      <div class="card high"><div class="n" id="k-high">-</div><div class="t">High Priority</div></div>
-      <div class="card"><div class="n" id="k-min">-</div><div class="t">Active Impact Minutes</div></div>
-    </div>
-
-    <h2>Impact minutes per day</h2>
-    <div class="panel"><div class="chartbox"><canvas id="chart"></canvas></div></div>
-
-    <h2>Exceptions</h2>
     <div class="filters">
       <div><label for="f-cat">Category</label><select id="f-cat">
         <option>All</option><option>Coal Despatch</option><option>Dust Suppression</option></select></div>
@@ -77,7 +71,28 @@
         <option>Haul Road A</option><option>Haul Road B</option><option>Junction A</option>
         <option>Stockyard A</option><option>Siding A</option><option>Siding B</option></select></div>
     </div>
+
+    <div class="cards">
+      <div class="card"><div class="n" id="k-open">-</div><div class="t">Open Exceptions</div></div>
+      <div class="card high"><div class="n" id="k-high">-</div><div class="t">High Priority</div></div>
+      <div class="card"><div class="n" id="k-min">-</div><div class="t">Active Impact Minutes</div></div>
+    </div>
+
+    <h2>Top 3 &ndash; Act Now</h2>
+    <div class="panel" id="top3">Loading...</div>
+
+    <h2>Active Impact Minutes by Category</h2>
+    <div class="panel"><div class="chartbox"><canvas id="chart"></canvas></div></div>
+
+    <h2>Exceptions</h2>
     <div class="panel" id="list">Loading...</div>
+
+    <h2>Why this tool exists</h2>
+    <div class="panel why">
+      <p><b>Problem:</b> Despatch and dust-control issues may be scattered across calls, messages and registers.</p>
+      <p><b>Decision:</b> Help the Shift In-Charge identify what requires action first.</p>
+      <p><b>Measure:</b> Track unresolved high-priority issues and productive-time impact.</p>
+    </div>
   </main>
   <footer>Training prototype &ndash; all data is made up</footer>
 
@@ -105,38 +120,65 @@
              (Date.now() - new Date(r.created_at).getTime()) > 30 * 60 * 1000;
     }
 
-    function drawChart(rows) {
-      var now = new Date();
-      var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13);
-      var days = [], byDay = {};
-      for (var i = 0; i < 14; i++) {
-        var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-        var k = dayKey(d);
-        days.push(k);
-        byDay[k] = { "Coal Despatch": 0, "Dust Suppression": 0 };
-      }
+    var CATS = ["Coal Despatch", "Dust Suppression"];
+
+    function activeByCategory(rows) {
+      var sums = { "Coal Despatch": 0, "Dust Suppression": 0 };
       rows.forEach(function (r) {
-        var c = new Date(r.created_at);
-        if (c >= start) {
-          var b = byDay[dayKey(c)];
-          if (b && b[r.category] !== undefined) b[r.category] += r.impact_minutes || 0;
-        }
+        if (r.status !== "Resolved" && sums[r.category] !== undefined) sums[r.category] += r.impact_minutes || 0;
       });
+      return CATS.map(function (c) { return sums[c]; });
+    }
+
+    function drawChart(rows) {
+      var data = activeByCategory(rows);
+      if (chart) {
+        chart.data.datasets[0].data = data;
+        chart.update("none");
+        return;
+      }
       chart = new Chart(document.getElementById("chart"), {
         type: "bar",
         data: {
-          labels: days.map(function (k) { return k.slice(8) + "/" + k.slice(5, 7); }),
-          datasets: [
-            { label: "Coal Despatch", backgroundColor: "#0b2a5b",
-              data: days.map(function (k) { return byDay[k]["Coal Despatch"]; }) },
-            { label: "Dust Suppression", backgroundColor: "#8aa4d6",
-              data: days.map(function (k) { return byDay[k]["Dust Suppression"]; }) }
-          ]
+          labels: CATS,
+          datasets: [{ label: "Active impact minutes", data: data,
+                       backgroundColor: ["#0b2a5b", "#8aa4d6"] }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: "Minutes" } } }
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, title: { display: true, text: "Minutes" } } }
         }
+      });
+    }
+
+    var URG = { High: 0, Medium: 1, Low: 2 };
+
+    function renderTop3(rows) {
+      var box = document.getElementById("top3");
+      box.textContent = "";
+      var top = rows.filter(function (r) { return r.status !== "Resolved"; })
+        .sort(function (a, b) {
+          return (URG[a.urgency] - URG[b.urgency]) ||
+                 ((b.impact_minutes || 0) - (a.impact_minutes || 0)) ||
+                 (new Date(a.created_at) - new Date(b.created_at));
+        }).slice(0, 3);
+      if (!top.length) { box.textContent = "No unresolved exceptions match these filters."; return; }
+      top.forEach(function (r, n) {
+        var item = el("div", "item" + (isOverdue(r) ? " overdue" : ""));
+        var head = el("div", "top");
+        var left = el("span", "");
+        left.appendChild(el("span", "rank", String(n + 1)));
+        left.appendChild(document.createTextNode(r.category + " - " + r.issue_type));
+        head.appendChild(left);
+        var badges = el("span", "badges");
+        if (isOverdue(r)) badges.appendChild(el("span", "badge overdue", "OVERDUE"));
+        badges.appendChild(el("span", "badge " + r.urgency, r.urgency));
+        head.appendChild(badges);
+        item.appendChild(head);
+        item.appendChild(el("div", "meta", r.location + " | " + r.impact_minutes + " min | " + r.status));
+        item.appendChild(el("div", "reason", r.urgency + " urgency \u00b7 " + r.impact_minutes + " min impact"));
+        box.appendChild(item);
       });
     }
 
@@ -153,6 +195,8 @@
 
     function renderView() {
       var rows = filtered();
+      renderTop3(rows);
+      drawChart(rows);
       var open = 0, high = 0, mins = 0;
       rows.forEach(function (r) {
         if (r.status === "Open" || r.status === "In progress") open++;
@@ -229,10 +273,10 @@
         if (!window.Chart) throw new Error("The chart library could not be loaded.");
         db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
         await loadRows();
-        drawChart(allRows);
         renderView();
       } catch (e) {
         document.getElementById("list").textContent = "";
+        document.getElementById("top3").textContent = "";
         fail("Sorry, the dashboard could not load. Error: " + e.message);
       }
     })();
