@@ -65,7 +65,7 @@
   id uuid primary key default gen_random_uuid() (profiles uses user_id) and
   created_at timestamptz not null default now().
 - Row Level Security is ON for every table. Signed-out visitors get NO access
-  once 05-lockdown.sql has been run. Signed-in users see data only according
+  once 06-lockdown.sql has been run. Signed-in users see data only according
   to their role.
 - Changes to records go through the named database functions (create_exception,
   start_exception, request_closure, decline_closure, resolve_exception,
@@ -77,7 +77,7 @@
 - The reported priority (reported_priority) is never overwritten. current_priority
   is the one used for the dashboard, Top 3, OVERDUE and analytics. urgency stays
   as a compatibility copy of current_priority.
-- Keep an emergency rollback file (05-rollback.sql) next to 05-lockdown.sql.
+- Keep an emergency rollback file (06-rollback.sql) next to 06-lockdown.sql.
 - Grants are explicit. Remember Supabase gives new tables and functions to
   anon by default, so revoke what is not needed.
 
@@ -98,6 +98,16 @@
 - Visibility: Shift In-Charge and above see everything. An Overman sees active
   exceptions plus their own history. Analytics, Top 3 and the chart are for
   Shift In-Charge and above.
+- Locations (from 05): ABC Patch, XYZ Patch, Haul Road A, Haul Road B, MDP Junction,
+  Stockyard 1, Siding 1, Siding 2.
+- Lifecycle: Resolve clears the active closure request (its history stays in the
+  audit and remarks). Reopen (Resolved to Open) starts a fresh cycle and clears
+  resolved_at, resolved_by, closure_requested_by, closure_requested_at,
+  started_by and started_at. Earlier audit and remarks are never removed.
+- An Overman's "my history" means Resolved exceptions he CREATED (created_by
+  never changes). Workflow fields are not used for history.
+- The browser gets no list of staff. Names shown for "set by" come from the
+  name snapshots stored on each record.
 - After creation these are never editable: shift, location, category, issue
   type, description, impact minutes, reported priority. Corrections are
   added as remarks.
@@ -124,7 +134,7 @@
 - Tool name: MineShift Command
 - Problem: Shift problems in Coal Despatch and Dust Suppression are not recorded in one place.
 - Who records / who decides: Shift staff record; shift managers decide (to confirm).
-- Table name and columns: shift_exceptions - id, created_at, shift, location, category, issue_type, description, impact_minutes, urgency, status, resolved_at, plus (from 04) created_by, created_by_role, reported_priority, current_priority, priority_changed_by, priority_changed_by_role, priority_changed_at, priority_change_reason, started_by, started_at, closure_requested_by, closure_requested_at, resolved_by, updated_at. Other tables: profiles, exception_remarks, exception_audit.
+- Table name and columns: shift_exceptions - id, created_at, shift, location, category, issue_type, description, impact_minutes, urgency, status, resolved_at, plus (from 04) created_by, created_by_role, reported_priority, current_priority, priority_changed_by, priority_changed_by_role, priority_changed_at, priority_change_reason, started_by, started_at, closure_requested_by, closure_requested_at, resolved_by, updated_at, and name snapshots created_by_name, priority_changed_by_name, started_by_name, closure_requested_by_name, resolved_by_name. Other tables: profiles, exception_remarks, exception_audit.
 - Pages: index.html = entry page; dashboard.html = dashboard; login.html = sign in (helper: auth.js)
 
 ## Progress Log (newest entry at the bottom)
@@ -141,4 +151,5 @@
 - Dashboard redesign (Claude): dashboard.html restyled to match the entry page - page title with one-line help, tidy filter panel, KPI cards with coloured top edge (red for High Priority), section headings with amber marker, exception and Top 3 rows as separate cards, OVERDUE rows tinted red. Only look changed; numbers, filters, Top 3, chart, Start/Resolve and OVERDUE rules are the same. No database change. Tested with a stand-in database only, not live.
 - Expansion to 4 categories (Claude): added Haul Road and Coal Quality (12 issue types each) to the entry page and the dashboard Category filter; chart now has 4 bars (active impact minutes per category). Same table shift_exceptions, same columns, same Top 3, KPI, Start/Resolve and OVERDUE rules. database/03-new-category-demo-rows.sql adds 8 fictional demo rows for the new categories (no table change; Data Keeper runs it once). Tested with a stand-in database only, not live.
 - Resolve fix attempt (Claude): live test said 'Resolve button did nothing'. dashboard.html only: the button now says 'Saving...', the page reads the record back from the database to confirm the change, and a pop-up at the bottom of the screen says 'X is now Resolved.' (green) or shows the error (red). If the database quietly refuses the change, the pop-up now says so. Real cause not yet known: need the red text or the pop-up text from the live site, plus the Data Keeper's policy check (see chat). No database change. Tested with a stand-in database only.
-- Login and roles, Phase A (Claude): database/04-auth-foundation.sql (additive; adds profiles, remarks, audit, new columns, protection triggers, 8 change functions, read rules, and links 7 fictional test accounts), auth.js (shared sign-in helper) and login.html (sign in and role check). index.html and dashboard.html are NOT changed yet and still work as before. The old open rules are still ON. Tested against a scratch local Postgres copy, not the live database. Next: Data Keeper takes a backup, runs 04, creates the 7 accounts in Supabase Auth, re-runs the link block; Phase B builds the role-aware pages; then 05-lockdown.sql and 05-rollback.sql. Do NOT run 05 before login and all roles are tested.
+- Login and roles, Phase A (Claude): database/04-auth-foundation.sql (additive; adds profiles, remarks, audit, new columns, protection triggers, 8 change functions, read rules, and links 7 fictional test accounts), auth.js (shared sign-in helper) and login.html (sign in and role check). index.html and dashboard.html are NOT changed yet and still work as before. The old open rules are still ON. Tested against a scratch local Postgres copy, not the live database. Next: Data Keeper takes a backup, runs 04, creates the 7 accounts in Supabase Auth, re-runs the link block; Phase B builds the role-aware pages; then 06-lockdown.sql and 06-rollback.sql. Do NOT run 06 before login and all roles are tested.
+- Login and roles, Phase A corrections (Claude): (1) create_exception now accepts the NEW location names; a separate database/05-location-renames.sql renames existing records (Coal Face A to ABC Patch, Coal Face B to XYZ Patch, Junction A to MDP Junction, Stockyard A to Stockyard 1, Siding A to Siding 1, Siding B to Siding 2; Haul Road A and B unchanged). It changes ONLY the location field, deletes nothing, leaves updated_at alone, adds one audit line per renamed record and is safe to run twice. Run it AFTER 04. 01 to 03 still use the old names, so run any of them you have not yet run BEFORE 05, and do not re-run them after 05. The old public pages still show the old names until Phase B. Future lockdown files are now 06-lockdown.sql and 06-rollback.sql (not written yet). (2) Resolve now clears the active closure request. (3) Reopen now also clears started_by and started_at. (4) An Overman's history is the Resolved exceptions he created. (5) The people view is removed; name snapshots are stored on the record instead, so the browser cannot list staff. Migration order: backup, 04, create accounts, re-run 04 link block, 05, build Phase B, test every role on the preview, merge Phase B, 06-lockdown, full permission test, keep 06-rollback for emergencies.

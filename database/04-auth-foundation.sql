@@ -4,7 +4,7 @@
 --   * nothing is dropped, deleted or overwritten
 --   * existing shift_exceptions rows are kept exactly as they are
 --   * only NEW empty columns are added and (for old rows) filled from urgency
---   * the old open access rules are NOT changed here (that is 05-lockdown.sql, later),
+--   * the old open access rules are NOT changed here (that is 06-lockdown.sql, later),
 --     so the live website keeps working exactly as before after you run this.
 --
 -- Run this whole file in the Supabase SQL Editor, in one go.
@@ -95,15 +95,21 @@ returns jsonb language sql stable security definer set search_path = public, pg_
   left join public.profiles p on p.user_id = auth.uid()
 $$;
 
--- Names only (no e-mail) so screens can show "set by <name>".
-create or replace view public.people as
-  select user_id, full_name, role from public.profiles;
+-- No directory of staff is exposed to the browser. Screens show "set by <name>" from the
+-- name snapshots stored on each record (see the *_name columns below).
+-- (An earlier draft of this file created a names view; it is removed if it exists.)
+drop view if exists public.people;
 
 -- ---------------------------------------------------------------------------
 -- 3. New columns on shift_exceptions (all empty for existing rows)
 -- ---------------------------------------------------------------------------
 alter table public.shift_exceptions add column if not exists created_by uuid;
 alter table public.shift_exceptions add column if not exists created_by_role text;
+alter table public.shift_exceptions add column if not exists created_by_name text;
+alter table public.shift_exceptions add column if not exists priority_changed_by_name text;
+alter table public.shift_exceptions add column if not exists started_by_name text;
+alter table public.shift_exceptions add column if not exists closure_requested_by_name text;
+alter table public.shift_exceptions add column if not exists resolved_by_name text;
 alter table public.shift_exceptions add column if not exists reported_priority text;
 alter table public.shift_exceptions add column if not exists current_priority text;
 alter table public.shift_exceptions add column if not exists priority_changed_by uuid;
@@ -193,12 +199,14 @@ returns trigger language plpgsql as $$
 begin
   if current_user in ('anon', 'authenticated') then
     -- A browser user cannot forge who did what, or insert an already-closed record.
-    NEW.created_by := null;            NEW.created_by_role := null;
+    NEW.created_by := null;            NEW.created_by_role := null;   NEW.created_by_name := null;
     NEW.priority_changed_by := null;   NEW.priority_changed_by_role := null;
+    NEW.priority_changed_by_name := null;
     NEW.priority_changed_at := null;   NEW.priority_change_reason := null;
-    NEW.started_by := null;            NEW.started_at := null;
+    NEW.started_by := null;            NEW.started_at := null;        NEW.started_by_name := null;
     NEW.closure_requested_by := null;  NEW.closure_requested_at := null;
-    NEW.resolved_by := null;           NEW.resolved_at := null;
+    NEW.closure_requested_by_name := null;
+    NEW.resolved_by := null;           NEW.resolved_at := null;       NEW.resolved_by_name := null;
     NEW.status := 'Open';
   end if;
   if coalesce(current_setting('app.in_rpc', true), '') <> '1' then
@@ -227,7 +235,7 @@ begin
   end if;
 
   if current_user = 'anon' then
-    -- Until 05-lockdown.sql the old website may still change status / resolved_at.
+    -- Until 06-lockdown.sql the old website may still change status / resolved_at.
     -- Everything else is fixed for good.
     if NEW.id                       is distinct from OLD.id
     or NEW.created_at               is distinct from OLD.created_at
@@ -250,17 +258,26 @@ begin
     or NEW.started_at               is distinct from OLD.started_at
     or NEW.closure_requested_by     is distinct from OLD.closure_requested_by
     or NEW.closure_requested_at     is distinct from OLD.closure_requested_at
-    or NEW.resolved_by              is distinct from OLD.resolved_by then
+    or NEW.resolved_by              is distinct from OLD.resolved_by
+    or NEW.created_by_name          is distinct from OLD.created_by_name
+    or NEW.priority_changed_by_name is distinct from OLD.priority_changed_by_name
+    or NEW.started_by_name          is distinct from OLD.started_by_name
+    or NEW.closure_requested_by_name is distinct from OLD.closure_requested_by_name
+    or NEW.resolved_by_name         is distinct from OLD.resolved_by_name then
       raise exception 'These fields cannot be edited after the record is created.';
     end if;
   end if;
 
-  NEW.updated_at := now();
+  -- The controlled location rename (05-location-renames.sql) sets app.skip_touch so that
+  -- renamed records keep their old updated_at.
+  if coalesce(current_setting('app.skip_touch', true), '') <> '1' then
+    NEW.updated_at := now();
+  end if;
   return NEW;
 end
 $$;
 
--- Audit lines for changes that did NOT go through the functions (before 05-lockdown).
+-- Audit lines for changes that did NOT go through the functions (before 06-lockdown).
 create or replace function public.exceptions_audit_direct()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 begin
@@ -333,8 +350,8 @@ begin
     raise exception 'Only an Overman / Supervisor or a Shift In-Charge can create an exception.';
   end if;
   if p_shift not in ('First', 'Second', 'Night') then raise exception 'Please choose a valid shift.'; end if;
-  if p_location not in ('Coal Face A','Coal Face B','Haul Road A','Haul Road B',
-                        'Junction A','Stockyard A','Siding A','Siding B') then
+  if p_location not in ('ABC Patch','XYZ Patch','Haul Road A','Haul Road B',
+                        'MDP Junction','Stockyard 1','Siding 1','Siding 2') then
     raise exception 'Please choose a valid location.'; end if;
   if p_category not in ('Coal Despatch','Dust Suppression','Haul Road','Coal Quality') then
     raise exception 'Please choose a valid category.'; end if;
@@ -348,9 +365,9 @@ begin
 
   insert into public.shift_exceptions
     (shift, location, category, issue_type, description, impact_minutes,
-     urgency, reported_priority, current_priority, status, created_by, created_by_role)
+     urgency, reported_priority, current_priority, status, created_by, created_by_role, created_by_name)
   values (p_shift, p_location, p_category, p_issue_type, btrim(p_description), p_impact_minutes,
-          p_priority, p_priority, p_priority, 'Open', v_a.user_id, v_a.role)
+          p_priority, p_priority, p_priority, 'Open', v_a.user_id, v_a.role, v_a.full_name)
   returning id into v_id;
 
   perform public._audit(v_id, 'created', v_a, null, 'Open',
@@ -373,7 +390,8 @@ begin
   if v_e.status <> 'Open' then
     raise exception 'Only an Open exception can be started (this one is %).', v_e.status; end if;
   update public.shift_exceptions
-     set status = 'In progress', started_by = v_a.user_id, started_at = now()
+     set status = 'In progress', started_by = v_a.user_id, started_by_name = v_a.full_name,
+         started_at = now()
    where id = p_id;
   perform public._audit(p_id, 'started', v_a, 'Open', 'In progress', null);
 end
@@ -396,7 +414,8 @@ begin
   if v_e.closure_requested_at is not null then
     raise exception 'A closure request is already waiting for confirmation.'; end if;
   update public.shift_exceptions
-     set closure_requested_by = v_a.user_id, closure_requested_at = now()
+     set closure_requested_by = v_a.user_id, closure_requested_by_name = v_a.full_name,
+         closure_requested_at = now()
    where id = p_id;
   insert into public.exception_remarks (exception_id, kind, body, author_id, author_name, author_role)
   values (p_id, 'operational', btrim(p_note), v_a.user_id, v_a.full_name, v_a.role);
@@ -407,7 +426,7 @@ $$;
 -- DECLINE CLOSURE: Shift In-Charge, Manager only when can_operate. Reason required.
 create or replace function public.decline_closure(p_id uuid, p_reason text)
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
-declare v_a public.profiles := public.app_actor(); v_e public.shift_exceptions; v_who text;
+declare v_a public.profiles := public.app_actor(); v_e public.shift_exceptions;
 begin
   perform set_config('app.in_rpc', '1', true);
   if not (v_a.role = 'shift_incharge' or (v_a.role = 'manager' and v_a.can_operate)) then
@@ -418,12 +437,11 @@ begin
   if not found then raise exception 'Exception not found.'; end if;
   if v_e.status <> 'In progress' or v_e.closure_requested_at is null then
     raise exception 'There is no closure request to decline on this exception.'; end if;
-  select coalesce(p.full_name, 'unknown') into v_who from public.profiles p where p.user_id = v_e.closure_requested_by;
   update public.shift_exceptions
-     set closure_requested_by = null, closure_requested_at = null
+     set closure_requested_by = null, closure_requested_by_name = null, closure_requested_at = null
    where id = p_id;
   perform public._audit(p_id, 'closure_declined', v_a,
-    format('Closure requested by %s at %s', coalesce(v_who, 'unknown'),
+    format('Closure requested by %s at %s', coalesce(v_e.closure_requested_by_name, 'unknown'),
            to_char(v_e.closure_requested_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI "UTC"')),
     'In progress', btrim(p_reason));
 end
@@ -448,14 +466,25 @@ begin
     raise exception 'There is no closure request, so please write a resolution note of at least 5 characters.'; end if;
   if v_note is not null and char_length(v_note) < 5 then
     raise exception 'A resolution note must have at least 5 characters.'; end if;
+  -- Final closure is confirmed: the ACTIVE closure request is cleared so a Resolved
+  -- exception never looks as if confirmation is still pending. The request itself stays in
+  -- the history: its audit line ('closure_requested'), its closure-note remark, and the
+  -- old_value written below.
   update public.shift_exceptions
-     set status = 'Resolved', resolved_at = now(), resolved_by = v_a.user_id
+     set status = 'Resolved', resolved_at = now(), resolved_by = v_a.user_id,
+         resolved_by_name = v_a.full_name,
+         closure_requested_by = null, closure_requested_by_name = null, closure_requested_at = null
    where id = p_id;
   if v_note is not null then
     insert into public.exception_remarks (exception_id, kind, body, author_id, author_name, author_role)
     values (p_id, 'operational', v_note, v_a.user_id, v_a.full_name, v_a.role);
   end if;
-  perform public._audit(p_id, 'resolved', v_a, 'In progress', 'Resolved',
+  perform public._audit(p_id, 'resolved', v_a,
+    case when v_e.closure_requested_at is null then 'In progress'
+         else format('In progress (closure requested by %s at %s)',
+                     coalesce(v_e.closure_requested_by_name, 'unknown'),
+                     to_char(v_e.closure_requested_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI "UTC"')) end,
+    'Resolved',
     coalesce(v_note, 'Resolved after a closure request'));
 end
 $$;
@@ -474,9 +503,13 @@ begin
   if not found then raise exception 'Exception not found.'; end if;
   if v_e.status <> 'Resolved' then
     raise exception 'Only a Resolved exception can be reopened (this one is %).', v_e.status; end if;
+  -- Reopening starts a fresh operational cycle: every current-cycle field is cleared.
+  -- The audit trail and the remarks keep the earlier Start, closure request and Resolve.
   update public.shift_exceptions
-     set status = 'Open', resolved_at = null, resolved_by = null,
-         closure_requested_by = null, closure_requested_at = null
+     set status = 'Open',
+         resolved_at = null, resolved_by = null, resolved_by_name = null,
+         closure_requested_by = null, closure_requested_by_name = null, closure_requested_at = null,
+         started_by = null, started_by_name = null, started_at = null
    where id = p_id;
   perform public._audit(p_id, 'reopened', v_a, 'Resolved', 'Open', btrim(p_reason));
 end
@@ -510,6 +543,7 @@ begin
   update public.shift_exceptions
      set current_priority = p_new, urgency = p_new,
          priority_changed_by = v_a.user_id, priority_changed_by_role = v_a.role,
+         priority_changed_by_name = v_a.full_name,
          priority_changed_at = now(), priority_change_reason = btrim(p_reason)
    where id = p_id;
   perform public._audit(p_id, 'priority_changed', v_a, v_old, p_new, btrim(p_reason));
@@ -542,43 +576,41 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------
--- 7. Who may READ what (added next to the old rules; the old open rules stay until 05)
+-- 7. Who may READ what (added next to the old rules; the old open rules stay until 06)
 -- ---------------------------------------------------------------------------
-do $$
-begin
-  if not exists (select 1 from pg_policies where schemaname = 'public'
-      and tablename = 'shift_exceptions' and policyname = 'role read exceptions') then
-    create policy "role read exceptions" on public.shift_exceptions
-      for select to authenticated
-      using (
-        public.app_rank() >= 2
-        or (public.app_rank() = 1
-            and (status <> 'Resolved'
-                 or created_by = auth.uid()
-                 or closure_requested_by = auth.uid()))
-      );
-  end if;
-  if not exists (select 1 from pg_policies where schemaname = 'public'
-      and tablename = 'profiles' and policyname = 'read own profile') then
-    create policy "read own profile" on public.profiles
-      for select to authenticated using (user_id = auth.uid());
-  end if;
-  if not exists (select 1 from pg_policies where schemaname = 'public'
-      and tablename = 'exception_remarks' and policyname = 'role read remarks') then
-    create policy "role read remarks" on public.exception_remarks
-      for select to authenticated
-      using (
-        public.app_rank() >= 1
-        and (kind = 'operational' or public.app_rank() >= 2)
-        and exists (select 1 from public.shift_exceptions e where e.id = exception_id)
-      );
-  end if;
-  if not exists (select 1 from pg_policies where schemaname = 'public'
-      and tablename = 'exception_audit' and policyname = 'role read audit') then
-    create policy "role read audit" on public.exception_audit
-      for select to authenticated using (public.app_rank() >= 2);
-  end if;
-end $$;
+-- These four policies are ours. They are dropped and re-created so a re-run always keeps
+-- them current. (The old open policies on shift_exceptions are NOT touched here.)
+--
+-- An Overman sees every exception that is not Resolved, plus Resolved ones he CREATED.
+-- "Created by" never changes, so it is a stable definition of "my history". Workflow fields
+-- such as closure_requested_by are cleared on Resolve / Decline, so they are not used here.
+-- No policy reads a table whose policy reads it back, so nothing here is recursive:
+-- shift_exceptions -> (nothing), exception_remarks -> shift_exceptions.
+drop policy if exists "role read exceptions" on public.shift_exceptions;
+create policy "role read exceptions" on public.shift_exceptions
+  for select to authenticated
+  using (
+    public.app_rank() >= 2
+    or (public.app_rank() = 1
+        and (status <> 'Resolved' or created_by = auth.uid()))
+  );
+
+drop policy if exists "read own profile" on public.profiles;
+create policy "read own profile" on public.profiles
+  for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists "role read remarks" on public.exception_remarks;
+create policy "role read remarks" on public.exception_remarks
+  for select to authenticated
+  using (
+    public.app_rank() >= 1
+    and (kind = 'operational' or public.app_rank() >= 2)
+    and exists (select 1 from public.shift_exceptions e where e.id = exception_id)
+  );
+
+drop policy if exists "role read audit" on public.exception_audit;
+create policy "role read audit" on public.exception_audit
+  for select to authenticated using (public.app_rank() >= 2);
 
 -- ---------------------------------------------------------------------------
 -- 8. Access rights on the NEW objects (signed-out visitors get nothing)
@@ -586,11 +618,9 @@ end $$;
 revoke all on public.profiles          from public, anon, authenticated;
 revoke all on public.exception_remarks from public, anon, authenticated;
 revoke all on public.exception_audit   from public, anon, authenticated;
-revoke all on public.people            from public, anon, authenticated;
 grant select on public.profiles          to authenticated;
 grant select on public.exception_remarks to authenticated;
 grant select on public.exception_audit   to authenticated;
-grant select on public.people            to authenticated;
 
 -- Functions: signed-in users only. Internal helpers: nobody from the browser.
 revoke all on function public.role_rank(text)          from public, anon;
