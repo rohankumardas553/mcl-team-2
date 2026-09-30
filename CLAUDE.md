@@ -11,7 +11,7 @@
 ## What we are building
 - A tool with at most 4 pages: index.html (entry page), dashboard.html
   (dashboard: what needs action now), analytics.html (historical analytics and
-  period comparison for management) and login.html (sign in). The shared helper file auth.js and the
+  period comparison and forecast readiness for management) and login.html (sign in). The shared helper file auth.js and the
   analytics code file analytics.js are not pages.
 - Every record has location, priority (Low / Medium / High) and status
   (Open / In progress / Resolved), plus the columns in "Our tool" below.
@@ -291,6 +291,75 @@
 - NOT YET (later phases only, when asked): forecasting, confidence ranges,
   anomaly detection, AI or LLM recommendations, automated decisions.
 
+## Phase E forecast readiness (in analytics.html and analytics.js)
+- PURPOSE: before any forecasting exists, answer "Does the filtered historical
+  dataset meet the prototype data-sufficiency requirements for attempting a
+  forecast?" It is a DATA-SUFFICIENCY check. "Ready" means only that these
+  prototype requirements are met. It does NOT mean the data is statistically
+  validated, or that any later forecast would be accurate, reliable or of
+  guaranteed quality. It makes NO forecast: no future values, no ranges, no "next week", no "likely",
+  no AI or LLM recommendations, no operational judgement. No new SQL, no new
+  grant, no new function, no write, no extra database request (it reuses the rows
+  the page already loaded).
+- NATURE OF THE THRESHOLDS: prototype ENGINEERING defaults for data sufficiency,
+  NOT operational or statistical thresholds. They are listed on the page (under "Prototype
+  engineering thresholds") and live in one place in analytics.js (READINESS).
+  States are only Not Ready / Limited / Ready. There is no score and no traffic
+  light; the badge colours are deliberately neutral (no red or green).
+- WHO: as Phase C and D (Shift In-Charge, Manager, Project Officer, General
+  Manager). The Overman stays blocked and nothing is requested.
+- FILTERS: the same Date range, Shift, Category and Location as the rest of the
+  page. All time is allowed. A custom range assesses only the selected window. The
+  CURRENT period only is assessed (never the previous comparison period). Because
+  the date range limits the history, Last 7 and Last 30 days can never reach 56
+  days; choose Last 90 days or All time to assess more history.
+- DEFINITIONS (local calendar dates of created_at): Historical span = latest
+  exception day minus earliest exception day + 1 (of the filtered exceptions, not
+  of the filter window). Distinct active days = unique days with at least one
+  exception. Zero-event days = span minus distinct active days (descriptive only).
+  Weeks = unique ISO 8601 weeks (Monday to Sunday). Months = unique calendar months.
+- EXCEPTION COUNT FORECAST: Not Ready if ANY of: span under 14 days, under 20
+  exceptions, under 7 distinct active days. Ready only if ALL of: span at least 56
+  days, at least 50 exceptions, at least 21 distinct active days. Otherwise
+  Limited. Weeks represented are shown as information only (no threshold).
+- IMPACT MINUTES FORECAST: the same three history thresholds, counted on the
+  exceptions that have a recorded impact value; plus: if total impact minutes is
+  0 it is Not Ready; if ONE exception contributes MORE than 50% of total impact
+  minutes it can never be Ready (it is Limited; exactly 50% is allowed). The 50%
+  rule applies to impact, not to the exception count forecast.
+- TIME-TO-START FORECAST: usable observation = started_at present and not before
+  created_at. Not Ready under 10 usable observations. Ready only if at least 30
+  usable observations AND at least 50% of filtered exceptions have one AND those
+  observations cover at least 28 calendar days (first to last created_at). Otherwise
+  Limited.
+- TIME-TO-RESOLVE FORECAST: usable observation = status Resolved, resolved_at
+  present and not before created_at. Not Ready under 10. Ready only if at least 30
+  usable observations AND at least 40% of filtered exceptions AND at least 28 days
+  of represented history. Otherwise Limited.
+- OVERALL FORECAST READINESS: Ready only if Exception Count AND Impact Minutes are
+  both Ready; Not Ready if either is Not Ready; otherwise Limited. Time-to-start and
+  time-to-resolve have their own readiness and do NOT change the overall state. Each
+  forecast type needs its own Ready state.
+- SHOWN ON THE PAGE: Forecast Readiness (overall, four metric cards each with the
+  state, a summary line and written factual reasons, and Readiness Notes),
+  Historical Coverage, Data Concentration (largest single impact and its share,
+  top category and top location share of impact minutes, top category + issue type
+  share of the exception count; ties are stated), Recurrence Coverage (per
+  category: exceptions, distinct days, distinct locations, issue types; and how many
+  category + issue type combinations occur once, 2 to 4 times, 5 or more times).
+  Rare groups are not called insignificant; nothing here infers a cause.
+- FORECAST GATE FOR A LATER PHASE: MineAnalytics.assessReadiness(rows, reopenedIds)
+  returns { overall, exceptionCount, impactMinutes, timeToStart, timeToResolve,
+  coverage, concentration, recurrence, notes, thresholds } and every metric has
+  state and reasons. MineAnalytics.isReady(readiness, metric) is true only when that
+  metric is "Ready". A forecasting phase must not produce a forecast for a metric
+  unless it is Ready.
+- LIMITATION (multiple lifecycle cycles): as before. Reopened exceptions are
+  measured by their CURRENT cycle only; earlier cycles are not reconstructed. The
+  lifecycle cards say so when reopened exceptions are present.
+- NOT YET (later phases only, when asked): forecasting itself, confidence ranges,
+  anomaly detection, AI or LLM recommendations, automated decisions.
+
 ## Final lockdown (07-lockdown.sql)
 - WHEN: run it ONLY after the login pages are live on the main branch (Vercel
   production) and every role has passed the preview tests. The old public pages
@@ -360,7 +429,7 @@
 - Problem: Shift problems in Coal Despatch and Dust Suppression are not recorded in one place.
 - Who records / who decides: Shift staff record; shift managers decide (to confirm).
 - Table name and columns: shift_exceptions - id, created_at, shift, location, category, issue_type, description, impact_minutes, urgency, status, resolved_at, plus (from 04) created_by, created_by_role, reported_priority, current_priority, priority_changed_by, priority_changed_by_role, priority_changed_at, priority_change_reason, started_by, started_at, closure_requested_by, closure_requested_at, resolved_by, updated_at, and name snapshots created_by_name, priority_changed_by_name, started_by_name, closure_requested_by_name, resolved_by_name. Other tables: profiles, exception_remarks, exception_audit.
-- Pages: index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics and period-to-period comparison (Shift In-Charge and above); login.html = sign in (helper: auth.js)
+- Pages: index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics, period-to-period comparison and forecast readiness (Shift In-Charge and above); login.html = sign in (helper: auth.js)
 
 ## Progress Log (newest entry at the bottom)
 - Phase 0 (starter): placeholder index.html, config.js without settings and
@@ -384,3 +453,4 @@
 - Management reopen (Claude): authority-model correction after the lockdown. A Resolved exception may now be reopened by a Shift In-Charge, Manager (no can_operate needed), Project Officer or General Manager; an Overman still cannot; a reason of 5+ characters is required and the audit line records who, role, Resolved to Open, the reason and the server time. Reopen still clears every current-cycle field (resolved_*, closure_requested_*, started_*, including the name snapshots) and never touches earlier audit or remarks. Start, Decline and Resolve rules, maker-checker and the priority rank lock are unchanged. Done in 04-auth-foundation.sql (fresh setups) and in the small database/08-management-reopen.sql for the live, already locked-down database (replaces ONLY reopen_exception; no table, row, policy or grant change; safe to run twice). database/08-management-reopen-rollback.sql restores the previous rule (Shift In-Charge, or Manager with can_operate). auth.js shows the Reopen button for the four roles. Tested against a scratch local Postgres copy that had 04, 05, 06 and 07 applied, then 08; not tested on the live Supabase.
 - Phase C analytics (Claude): new analytics.html and analytics.js (historical analytics for Shift In-Charge, Manager, Project Officer and General Manager; the Overman gets no menu link and a "Not authorised" message on a manual visit), one line in auth.js to add the Analytics menu item for the "view_analytics" permission, and this CLAUDE.md section. Filters (date range, shift, category, location), 6 KPI cards, rule-based Management Attention, 6 charts, Operational Hotspots, Recurring Operational Constraints table, Response and Closure Performance, Priority Distribution and Priority Changes. Read-only, client-side aggregation of rows the person may already read; NO new SQL, no new grant, no change to the lockdown, maker-checker, reopen authority or priority rules. Known limitation: multiple lifecycle cycles are not added up. No forecasting and no AI recommendations yet. Tested against a scratch local Postgres copy with 2,326 demo rows over about 13 months; not tested on the live Supabase.
 - Phase D period comparison (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). Compares the selected period with the immediately preceding period of the same length (custom ranges too; not for All time): Period Comparison banner, comparison lines on the 6 KPI cards, Strategic Management Attention (up to 5 factual sentences), Category Change, Location Change, Recurring Issue Change, Hotspot Movement (increases and decreases), Management Review Candidates (factual list, not recommendations), Response & Closure comparison (percentage points), Priority comparison and Priority Changes, dashed previous-period line on the trend charts (periods up to 90 days). Read-only; one bulk read covers both periods. No forecasting and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not added up. Tested against a scratch local Postgres copy with 2,326 demo rows; not tested on the live Supabase.
+- Phase E forecast readiness (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no function, no extra database request, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). New "Forecast Readiness" section: Not Ready / Limited / Ready for Exception Count, Impact Minutes, Time-to-Start and Time-to-Resolve forecasts, each with written factual reasons, plus an overall state, Readiness Notes, Historical Coverage, Data Concentration and Recurrence Coverage. Prototype engineering thresholds (data sufficiency, not operational or statistical) are shown on the page and listed above. Ready does not mean statistically validated, accurate or reliable. Reusable gate for a later phase: MineAnalytics.assessReadiness and isReady. NO forecasting, no scores and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not reconstructed. Tested against a scratch local Postgres copy with 2,326 demo rows and hand-built boundary datasets; not tested on the live Supabase.

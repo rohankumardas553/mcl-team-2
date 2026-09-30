@@ -110,6 +110,20 @@
     .cmp-dir { font-weight: 700; color: var(--navy); }
     .cmp-note { color: #4b5d80; }
     .sub2 { font-size: 16px; margin: 14px 0 6px; }
+    /* Phase E: forecast readiness (restrained colours: these states describe data sufficiency, not performance) */
+    .rbadge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; border: 2px solid; white-space: nowrap; }
+    .rbadge.NotReady { background: #fff; color: #334155; border-color: #64748b; }
+    .rbadge.Limited { background: #fef3c7; color: #422006; border-color: #d97706; }
+    .rbadge.Ready { background: #dbe6f7; color: #0b2a5b; border-color: #0b2a5b; }
+    .ready-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
+    .ready-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 6px; }
+    .ready-head h3 { margin: 0; }
+    .rsum { margin: 6px 0; font-size: 16px; }
+    .rlist { margin: 8px 0 0; padding-left: 20px; font-size: 15px; color: #33466b; }
+    .rlist li { margin-bottom: 4px; }
+    #r-notes { margin: 0; padding-left: 20px; }
+    #r-notes li { margin-bottom: 6px; font-size: 16px; }
+    details.thr summary { cursor: pointer; font-weight: 700; color: var(--navy); min-height: 44px; display: flex; align-items: center; }
     .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
     #msg { padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; margin-bottom: 12px; }
@@ -127,6 +141,7 @@
       .charts { grid-template-columns: 1fr 1fr; }
       .hotlist { grid-template-columns: repeat(2, 1fr); }
       .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .ready-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (min-width: 1000px) {
       main { padding: 24px; }
@@ -335,6 +350,68 @@
         <h2>Priority Changes</h2>
         <div class="stats">
           <div class="card"><div class="n" id="priority-changes">-</div><div class="t">Exceptions with a priority change</div><div class="s" id="priority-changes-sub"></div><div class="cmp" id="priority-changes-cmp"></div></div>
+        </div>
+
+        <!-- 9. Phase E: forecast readiness (data sufficiency only; no forecast) -->
+        <h2>Forecast Readiness</h2>
+        <div class="panel">
+          <p class="note" style="margin-top:0">Checks whether the filtered historical dataset meets the prototype data-sufficiency requirements for attempting a <b>later</b> forecast. No forecast is made on this page.
+            The states describe data sufficiency only, measured against prototype engineering thresholds (listed at the end of this section). They are not an operational rating, and Ready does not mean the data is statistically validated or that a later forecast would be accurate or reliable.
+            The date range filter limits the history that is assessed: choose Last 90 days or All time to assess more history.</p>
+          <div class="ready-head" style="margin-top:12px"><h3>Overall Forecast Readiness</h3><span class="rbadge" id="r-overall-badge"></span></div>
+          <ul class="rlist" id="r-overall-reasons"></ul>
+        </div>
+        <div class="ready-grid">
+          <div class="panel">
+            <div class="ready-head"><h3>Exception Count Forecast</h3><span class="rbadge" id="r-count-badge"></span></div>
+            <p class="rsum" id="r-count-sum"></p>
+            <ul class="rlist" id="r-count-reasons"></ul>
+          </div>
+          <div class="panel">
+            <div class="ready-head"><h3>Impact Minutes Forecast</h3><span class="rbadge" id="r-impact-badge"></span></div>
+            <p class="rsum" id="r-impact-sum"></p>
+            <ul class="rlist" id="r-impact-reasons"></ul>
+          </div>
+          <div class="panel">
+            <div class="ready-head"><h3>Time-to-Start Forecast</h3><span class="rbadge" id="r-start-badge"></span></div>
+            <p class="rsum" id="r-start-sum"></p>
+            <ul class="rlist" id="r-start-reasons"></ul>
+          </div>
+          <div class="panel">
+            <div class="ready-head"><h3>Time-to-Resolve Forecast</h3><span class="rbadge" id="r-resolve-badge"></span></div>
+            <p class="rsum" id="r-resolve-sum"></p>
+            <ul class="rlist" id="r-resolve-reasons"></ul>
+          </div>
+        </div>
+        <h3 class="sub2">Readiness Notes</h3>
+        <div class="panel"><ul id="r-notes"></ul></div>
+
+        <h2>Historical Coverage</h2>
+        <div class="stats" id="cov-cards"></div>
+        <p class="note">Span = latest calendar day minus earliest calendar day of the filtered exceptions, plus 1 (your local dates). Zero-event days = span minus distinct active days; this is descriptive only. Weeks are ISO weeks (Monday to Sunday).</p>
+
+        <h2>Data Concentration</h2>
+        <div class="stats" id="conc-cards"></div>
+        <p class="note">Descriptive only. Shares of impact minutes use the filtered exceptions; the issue type share uses the number of exceptions.</p>
+
+        <h2>Recurrence Coverage</h2>
+        <div class="panel">
+          <table id="rec-table">
+            <thead><tr><th>Category</th><th class="n">Exceptions</th><th class="n">Distinct Days</th><th class="n">Distinct Locations</th><th class="n">Issue Types</th></tr></thead>
+            <tbody id="rec-body"></tbody>
+          </table>
+        </div>
+        <div class="stats" id="rec-cards" style="margin-top:14px"></div>
+
+        <div class="panel" style="margin-top:14px">
+          <details class="thr">
+            <summary>Prototype engineering thresholds (data sufficiency, not operational or statistical thresholds)</summary>
+            <table id="thr-table" style="margin-top:8px">
+              <thead><tr><th>Measure</th><th>Not Ready when</th><th>Ready when</th></tr></thead>
+              <tbody id="thr-body"></tbody>
+            </table>
+            <p class="note">Otherwise Limited. Overall is Ready only when Exception Count and Impact Minutes are both Ready, Not Ready when either is Not Ready, otherwise Limited. Time-to-start and time-to-resolve have their own readiness. There is no score. Time durations use the current cycle of each exception; reopened multi-cycle durations are not reconstructed.</p>
+          </details>
         </div>
 
         <p class="note" style="margin-top:18px">
