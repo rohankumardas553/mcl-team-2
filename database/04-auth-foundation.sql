@@ -657,7 +657,7 @@ grant execute on function public.change_priority(uuid, text, text)   to authenti
 grant execute on function public.add_remark(uuid, text, text)        to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 9. Link the 7 FICTIONAL test accounts to their roles.
+-- 9. Link the 8 FICTIONAL test accounts to their roles.
 --    Create the accounts in Supabase first (Authentication > Users), then run this
 --    file again (or just this block). It does nothing for an account that does not
 --    exist yet, and never changes a profile that is already linked.
@@ -668,6 +668,7 @@ from (values
   ('overman1@example.com', 'Test Overman One',          'overman',         false),
   ('overman2@example.com', 'Test Overman Two',          'overman',         false),
   ('sic1@example.com',     'Test Shift In-Charge One',  'shift_incharge',  false),
+  ('sic2@example.com',     'Test Shift In-Charge Two',  'shift_incharge',  false),
   ('manager1@example.com', 'Test Manager One',          'manager',         false),
   ('manager2@example.com', 'Test Manager Two (operate)','manager',         true),
   ('po1@example.com',      'Test Project Officer One',  'project_officer', false),
