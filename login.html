@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MineShift Command - Sign in</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { --navy: #0b2a5b; --navy-dark: #071c40; --ink: #0b1f44; --line: #c7d2e5; --bg: #eef2f8; }
+    body { margin: 0; font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif; background: var(--bg);
+           color: var(--ink); font-size: 18px; line-height: 1.4; }
+
+    /* Shared header (same on every page) */
+    header { background: var(--navy-dark); color: #fff; border-bottom: 4px solid #f59e0b; }
+    .bar { max-width: 1240px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap;
+           align-items: center; justify-content: space-between; gap: 8px 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: .3px; }
+    .mark { width: 38px; height: 38px; border-radius: 9px; background: #fff; color: var(--navy);
+            display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
+    nav { display: flex; gap: 6px; }
+    nav a { color: #fff; text-decoration: none; font-weight: 600; font-size: 16px; padding: 10px 16px;
+            min-height: 44px; display: inline-flex; align-items: center; border-radius: 10px; }
+    nav a:hover { background: rgba(255,255,255,.14); }
+    nav a.active { background: #fff; color: var(--navy); }
+
+    main { max-width: 560px; margin: 0 auto; padding: 20px 16px 8px; }
+    .title h1 { font-size: 28px; margin: 4px 0 4px; }
+    .title p { margin: 0 0 16px; color: #33466b; font-size: 16px; }
+
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px;
+            margin-bottom: 16px; box-shadow: 0 2px 8px rgba(11, 42, 91, .08); }
+    .card h2 { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--navy); margin: 0 0 12px; }
+    .field { margin-bottom: 16px; }
+    .label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 17px; }
+    input[type=email], input[type=password] {
+      width: 100%; font: inherit; padding: 14px; min-height: 56px; color: var(--ink);
+      border: 2px solid var(--line); border-radius: 12px; background: #fff; }
+    input:focus { outline: 3px solid rgba(11, 42, 91, .35); border-color: var(--navy); }
+
+    button.big, a.big { display: block; width: 100%; min-height: 60px; font: inherit; font-size: 20px; font-weight: 700;
+      color: #fff; background: var(--navy); border: 0; border-radius: 14px; cursor: pointer; text-align: center;
+      text-decoration: none; padding: 16px; margin-top: 10px; }
+    button.big:hover, a.big:hover { background: var(--navy-dark); }
+    button.big:focus-visible, a.big:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+    button.big:disabled { opacity: .6; }
+    .secondary { background: #fff !important; color: var(--navy) !important; border: 2px solid var(--navy) !important; }
+
+    dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
+    dt { font-weight: 700; }
+    dd { margin: 0; word-wrap: break-word; }
+    ul.perms { list-style: none; margin: 0; padding: 0; }
+    ul.perms li { padding: 6px 0; border-top: 1px solid #e3e9f4; font-size: 16px; display: flex; gap: 10px; }
+    ul.perms li:first-child { border-top: 0; }
+    .yes { color: #14532d; font-weight: 700; min-width: 22px; }
+    .no { color: #7f1d1d; font-weight: 700; min-width: 22px; }
+    .note { font-size: 15px; color: #33466b; margin: 12px 0 0; }
+
+    #msg { margin-bottom: 16px; padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; }
+    #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
+    #msg.ok { display: block; background: #dcfce7; color: #14532d; border: 2px solid #16a34a; font-weight: 700; }
+    #msg.info { display: block; background: #e0e7ff; color: #0b2a5b; border: 2px solid #0b2a5b; }
+    [hidden] { display: none !important; }
+    footer { text-align: center; padding: 20px 16px 28px; font-size: 14px; color: var(--navy); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand"><span class="mark">MS</span>MineShift Command</div>
+      <nav>
+        <a href="index.html">Add Shift Exception</a>
+        <a href="dashboard.html">Dashboard</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="title">
+      <h1>Sign in</h1>
+      <p>Use your own account. If you do not have one, ask the Data Keeper.</p>
+    </div>
+    <div id="msg" role="status"></div>
+
+    <section class="card" id="signin-card">
+      <h2>Your account</h2>
+      <form id="form" autocomplete="on">
+        <div class="field">
+          <label class="label" for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="username" required inputmode="email">
+        </div>
+        <div class="field">
+          <label class="label" for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="big" id="signin">Sign in</button>
+      </form>
+    </section>
+
+    <section class="card" id="me-card" hidden>
+      <h2>Signed in</h2>
+      <dl>
+        <dt>Name</dt><dd id="me-name"></dd>
+        <dt>Role</dt><dd id="me-role"></dd>
+        <dt>Level</dt><dd id="me-rank"></dd>
+        <dt id="me-op-label">Can operate</dt><dd id="me-op"></dd>
+      </dl>
+      <p class="note">Database check passed: the database recognises this account and its role.</p>
+      <button type="button" class="big secondary" id="signout">Sign out</button>
+    </section>
+
+    <section class="card" id="perms-card" hidden>
+      <h2>What your role can do</h2>
+      <ul class="perms" id="perms"></ul>
+      <p class="note">This list is a guide only. The database enforces the real permissions.</p>
+      <p class="note"><b>Phase A:</b> the login foundation is ready. The Add and Dashboard pages do not use your login yet.</p>
+      <a class="big secondary" href="dashboard.html">Go to Dashboard</a>
+      <a class="big secondary" href="index.html">Go to Add Shift Exception</a>
+    </section>
+  </main>
+  <footer>Training prototype &ndash; all data is made up</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    var msg = document.getElementById("msg");
+    var form = document.getElementById("form");
+    var signinBtn = document.getElementById("signin");
+    var $ = function (id) { return document.getElementById(id); };
+
+    function show(kind, text) { msg.className = kind; msg.textContent = text; }
+
+    var ACTIONS = [
+      ["create", "Create an exception"],
+      ["start", "Start an exception"],
+      ["request_closure", "Request closure"],
+      ["decline_closure", "Decline a closure request"],
+      ["resolve", "Resolve (confirm closure)"],
+      ["reopen", "Reopen a Resolved exception"],
+      ["change_priority", "Change priority (with a reason)"],
+      ["remark_operational", "Add operational remarks"],
+      ["remark_management", "Add management remarks"],
+      ["view_analytics", "See analytics and Top 3"],
+      ["view_all_history", "See all history"],
+      ["view_own_history", "See your own history"]
+    ];
+
+    function showSignedOut() {
+      $("me-name").textContent = "";
+      $("me-role").textContent = "";
+      $("perms").textContent = "";
+      $("signin-card").hidden = false;
+      $("me-card").hidden = true;
+      $("perms-card").hidden = true;
+    }
+
+    function showSignedIn(access) {
+      var role = MineShift.ROLES[access.role];
+      $("me-name").textContent = access.full_name;
+      $("me-role").textContent = role ? role.label : access.role;
+      $("me-rank").textContent = access.rank + " of 5";
+      var isManager = access.role === "manager";
+      $("me-op-label").hidden = !isManager;
+      $("me-op").hidden = !isManager;
+      $("me-op").textContent = access.can_operate ? "Yes" : "No";
+      var list = $("perms");
+      list.textContent = "";
+      ACTIONS.forEach(function (a) {
+        var yes = MineShift.can(a[0], access);
+        var li = document.createElement("li");
+        var mark = document.createElement("span");
+        mark.className = yes ? "yes" : "no";
+        mark.textContent = yes ? "Yes" : "No";
+        li.appendChild(mark);
+        li.appendChild(document.createTextNode(a[1]));
+        list.appendChild(li);
+      });
+      $("signin-card").hidden = true;
+      $("me-card").hidden = false;
+      $("perms-card").hidden = false;
+    }
+
+    // Look at the current session and show the right card.
+    async function refresh() {
+      var session = await MineShift.getSession();
+      if (!session) { showSignedOut(); return; }
+      var access = await MineShift.loadAccess();
+      if (!access || !access.linked) {
+        showSignedOut();
+        show("err", "You are signed in, but your account is not linked to a role yet. " +
+                    "Please ask the Data Keeper to link your profile. You have been signed out.");
+        await MineShift.signOut();
+        return;
+      }
+      if (!access.active) {
+        showSignedOut();
+        show("err", "Your account is switched off. Please ask the Data Keeper. You have been signed out.");
+        await MineShift.signOut();
+        return;
+      }
+      showSignedIn(access);
+    }
+
+    form.addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      if (!MineShift.ready) { show("err", "The database is not connected. Error: " + MineShift.error); return; }
+      var email = $("email").value.trim();
+      var password = $("password").value;
+      signinBtn.disabled = true;
+      show("", "");
+      try {
+        await MineShift.signIn(email, password);
+        $("password").value = "";
+        await refresh();
+        if (!$("me-card").hidden) show("ok", "Signed in successfully.");
+      } catch (e) {
+        $("password").value = "";
+        show("err", "Sorry, sign-in did not work. Error: " + e.message);
+      }
+      signinBtn.disabled = false;
+    });
+
+    $("signout").addEventListener("click", async function () {
+      try {
+        await MineShift.signOut();
+        showSignedOut();
+        show("info", "You have been signed out.");
+      } catch (e) {
+        show("err", "Sorry, sign-out did not work. Error: " + e.message);
+      }
+    });
+
+    (async function () {
+      if (!MineShift.ready) {
+        show("err", "The database is not connected. Please tell the team. Error: " + MineShift.error);
+        signinBtn.disabled = true;
+        return;
+      }
+      try {
+        await refresh();
+      } catch (e) {
+        show("err", "Sorry, the sign-in check did not work. Error: " + e.message);
+      }
+    })();
+  </script>
+</body>
+</html>
