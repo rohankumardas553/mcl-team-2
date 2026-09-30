@@ -81,6 +81,12 @@
                   border: 2px solid #dc2626; font-size: 16px; word-wrap: break-word; }
     .why p { margin: 8px 0; font-size: 16px; }
 
+    #toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 20;
+             width: calc(100% - 32px); max-width: 560px; }
+    #toast.ok, #toast.err { padding: 14px 16px; border-radius: 12px; font-weight: 700; word-wrap: break-word;
+             box-shadow: 0 6px 20px rgba(0, 0, 0, .25); }
+    #toast.ok { background: #14532d; color: #fff; }
+    #toast.err { background: #7f1d1d; color: #fff; }
     #msg { padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; margin-bottom: 12px; }
     #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
     footer { text-align: center; padding: 20px 16px 28px; font-size: 14px; color: var(--navy); }
@@ -159,6 +165,7 @@
       <p><b>Measure:</b> Track unresolved high-priority issues and productive-time impact.</p>
     </div>
   </main>
+  <div id="toast" role="status" aria-live="polite"></div>
   <footer>Training prototype &ndash; all data is made up</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -305,8 +312,19 @@
       allRows = res.data || [];
     }
 
+    var toastTimer = null;
+    function toast(kind, text) {
+      var t = document.getElementById("toast");
+      t.className = kind;
+      t.textContent = text;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { t.className = ""; t.textContent = ""; }, 6000);
+    }
+
     async function changeStatus(r, btn) {
+      var label = btn.textContent;
       btn.disabled = true;
+      btn.textContent = "Saving...";
       msg.className = ""; msg.textContent = "";
       try {
         var change = r.status === "Open"
@@ -315,15 +333,25 @@
         var res = await db.from("shift_exceptions").update(change.values)
           .eq("id", r.id).eq("status", change.from).select("id");
         if (res.error) throw new Error(res.error.message);
-        if (!res.data || !res.data.length) throw new Error("The record was not changed. It may have been updated by someone else. Please check the list.");
+        if (!res.data || !res.data.length) throw new Error("The database did not change this record (0 rows updated). Please tell the team.");
+        // Read the record back to be sure the change was really saved.
+        var check = await db.from("shift_exceptions").select("status").eq("id", r.id);
+        if (check.error) throw new Error(check.error.message);
+        var now = check.data && check.data[0];
+        if (!now || now.status !== change.values.status) {
+          throw new Error("The database still shows this record as '" + (now ? now.status : "missing") + "' after saving. Please tell the team.");
+        }
         await loadRows();
         renderView();
+        toast("ok", (r.issue_type || "Record") + " is now " + change.values.status + ".");
       } catch (e) {
         var text = "Sorry, the status could not be changed. Error: " + e.message;
         fail(text);
+        toast("err", text);
         var note = el("div", "inline-err", text);
         note.setAttribute("role", "alert");
         btn.parentNode.appendChild(note);
+        btn.textContent = label;
         btn.disabled = false;
       }
     }
