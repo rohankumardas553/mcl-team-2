@@ -121,7 +121,8 @@
 
     <div class="filters">
       <div><label for="f-cat">Category</label><select id="f-cat">
-        <option>All</option><option>Coal Despatch</option><option>Dust Suppression</option></select></div>
+        <option>All</option><option>Coal Despatch</option><option>Dust Suppression</option>
+        <option>Haul Road</option><option>Coal Quality</option></select></div>
       <div><label for="f-shift">Shift</label><select id="f-shift">
         <option>All</option><option>First</option><option>Second</option><option>Night</option></select></div>
       <div><label for="f-loc">Location</label><select id="f-loc">
@@ -181,10 +182,11 @@
              (Date.now() - new Date(r.created_at).getTime()) > 30 * 60 * 1000;
     }
 
-    var CATS = ["Coal Despatch", "Dust Suppression"];
+    var CATS = ["Coal Despatch", "Dust Suppression", "Haul Road", "Coal Quality"];
 
     function activeByCategory(rows) {
-      var sums = { "Coal Despatch": 0, "Dust Suppression": 0 };
+      var sums = {};
+      CATS.forEach(function (c) { sums[c] = 0; });
       rows.forEach(function (r) {
         if (r.status !== "Resolved" && sums[r.category] !== undefined) sums[r.category] += r.impact_minutes || 0;
       });
@@ -203,7 +205,7 @@
         data: {
           labels: CATS,
           datasets: [{ label: "Active impact minutes", data: data,
-                       backgroundColor: ["#0b2a5b", "#8aa4d6"] }]
+                       backgroundColor: ["#0b2a5b", "#8aa4d6", "#3b6bb5", "#5b7a99"] }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
