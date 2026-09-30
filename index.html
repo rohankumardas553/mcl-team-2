@@ -106,7 +106,7 @@
   <main>
     <div class="title">
       <h1>Add Shift Exception</h1>
-      <p>Coal Despatch and Dust Suppression. Fill in the three steps and press the button.</p>
+      <p>Coal Despatch, Dust Suppression, Haul Road and Coal Quality. Fill in the three steps and press the button.</p>
     </div>
 
     <form id="form">
@@ -139,6 +139,8 @@
           <div class="choices two" role="radiogroup" aria-labelledby="cat-label">
             <label class="choice"><input type="radio" name="category" value="Coal Despatch" required><span>Coal Despatch</span></label>
             <label class="choice"><input type="radio" name="category" value="Dust Suppression"><span>Dust Suppression</span></label>
+            <label class="choice"><input type="radio" name="category" value="Haul Road"><span>Haul Road</span></label>
+            <label class="choice"><input type="radio" name="category" value="Coal Quality"><span>Coal Quality</span></label>
           </div>
         </div>
         <div class="field">
@@ -190,7 +192,14 @@
         "Siding congestion", "Weighbridge delay", "Haul-road delay", "Weather", "Other"],
       "Dust Suppression": ["Water tanker required", "Water tanker unavailable",
         "Fog cannon required", "Fog cannon unavailable", "Heavy dust",
-        "Sprinkling required", "Other"]
+        "Sprinkling required", "Other"],
+      "Haul Road": ["Potholes", "Slippery road", "Waterlogging", "Poor road surface",
+        "Berm issue", "Drainage problem", "Grader required", "Dozer required",
+        "Water tanker required", "Traffic congestion", "Poor visibility", "Other"],
+      "Coal Quality": ["Shale or band contamination", "Stone contamination", "Oversize coal",
+        "Mixed coal", "Excess moisture", "Grade concern", "Face quality issue",
+        "Siding quality issue", "Segregation required", "Rehandling required",
+        "Sampling concern", "Other"]
     };
     var form = document.getElementById("form");
     var issue = document.getElementById("issue");
