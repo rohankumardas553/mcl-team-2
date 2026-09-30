@@ -119,6 +119,10 @@
     .ready-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 6px; }
     .ready-head h3 { margin: 0; }
     .rsum { margin: 6px 0; font-size: 16px; }
+    .rlabel { font-size: 12px; letter-spacing: .6px; text-transform: uppercase; color: #4b5d80; margin: 10px 0 2px; }
+    .rlabel[hidden], .rlist[hidden] { display: none; }
+    p.lead { margin: 0 0 8px; font-weight: 700; color: var(--navy); }
+    p.intro { font-size: 15px; margin: 0 0 8px; }
     .rlist { margin: 8px 0 0; padding-left: 20px; font-size: 15px; color: #33466b; }
     .rlist li { margin-bottom: 4px; }
     #r-notes { margin: 0; padding-left: 20px; }
@@ -178,7 +182,7 @@
   <main>
     <div class="title">
       <h1>Analytics</h1>
-      <p>Which recurring operational constraints cost the most time, where they happen, and what has changed compared with the previous period.</p>
+      <p>What happened, how it changed compared with the previous period, and whether the history is sufficient for a later forecast.</p>
     </div>
     <div id="msg" role="status"></div>
 
@@ -224,29 +228,30 @@
         <!-- 3. KPI cards (current value, with previous value and change below) -->
         <div class="cards">
           <div class="card"><div class="n" id="k-total">-</div><div class="t">Total Exceptions</div><div class="s" id="k-total-sub"></div><div class="cmp" id="k-total-cmp"></div></div>
-          <div class="card"><div class="n" id="k-impact">-</div><div class="t">Total Impact Minutes</div><div class="s" id="k-impact-sub"></div><div class="cmp" id="k-impact-cmp"></div></div>
+          <div class="card"><div class="n" id="k-impact">-</div><div class="t">Total Recorded Impact Minutes</div><div class="s" id="k-impact-sub"></div><div class="cmp" id="k-impact-cmp"></div></div>
           <div class="card"><div class="n" id="k-avg">-</div><div class="t">Average Impact per Exception</div><div class="s" id="k-avg-sub"></div><div class="cmp" id="k-avg-cmp"></div></div>
-          <div class="card"><div class="n" id="k-start">-</div><div class="t">Average Time to Start</div><div class="s" id="k-start-sub"></div><div class="cmp" id="k-start-cmp"></div></div>
-          <div class="card"><div class="n" id="k-resolve">-</div><div class="t">Average Time to Resolve</div><div class="s" id="k-resolve-sub"></div><div class="cmp" id="k-resolve-cmp"></div></div>
+          <div class="card"><div class="n" id="k-start">-</div><div class="t">Average Time from Reporting to Start of Work</div><div class="s" id="k-start-sub"></div><div class="cmp" id="k-start-cmp"></div></div>
+          <div class="card"><div class="n" id="k-resolve">-</div><div class="t">Average Time from Reporting to Resolution</div><div class="s" id="k-resolve-sub"></div><div class="cmp" id="k-resolve-cmp"></div></div>
           <div class="card"><div class="n" id="k-reopened">-</div><div class="t">Reopened Exceptions</div><div class="s" id="k-reopened-sub"></div><div class="cmp" id="k-reopened-cmp"></div></div>
         </div>
 
         <!-- 4. Strategic management attention -->
         <h2>Strategic Management Attention</h2>
         <div class="panel">
+          <p class="lead" id="attention-lead"></p>
           <ul id="attention"></ul>
-          <p class="note">Facts taken directly from the current and previous periods. No prediction, no cause and no advice.</p>
+          <p class="note" id="attention-note">Facts calculated from the current and previous periods. No prediction, inferred cause or recommendation.</p>
         </div>
 
         <!-- 4. Trend charts -->
         <h2>Trends</h2>
         <div class="charts">
-          <div class="panel"><h3 id="t-created">Exceptions Created Over Time</h3><div class="chartbox"><canvas id="c-created"></canvas></div></div>
+          <div class="panel"><h3 id="t-created">Exceptions Reported Over Time</h3><div class="chartbox"><canvas id="c-created"></canvas></div></div>
           <div class="panel"><h3 id="t-impact">Impact Minutes Over Time</h3><div class="chartbox"><canvas id="c-impact"></canvas></div></div>
           <div class="panel"><h3>Impact Minutes by Category</h3><div class="chartbox"><canvas id="c-cat"></canvas></div></div>
           <div class="panel"><h3>Impact Minutes by Location</h3><div class="chartbox"><canvas id="c-loc"></canvas></div></div>
           <div class="panel"><h3>Exceptions by Shift</h3><div class="chartbox"><canvas id="c-shift"></canvas></div></div>
-          <div class="panel"><h3>Top Issue Types (by number of exceptions)</h3><div class="chartbox"><canvas id="c-issue"></canvas></div></div>
+          <div class="panel"><h3>Top 10 Issue Types (by number of exceptions)</h3><div class="chartbox"><canvas id="c-issue"></canvas></div></div>
         </div>
 
         <!-- 6. Phase D comparison sections -->
@@ -254,22 +259,22 @@
         <h2>Category Change</h2>
         <div class="panel">
           <div class="empty" id="cat-empty" hidden></div>
-          <table id="cat-table"><thead><tr><th>Category</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exceptions Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Impact % Change</th></tr></thead><tbody id="cat-body"></tbody></table>
-          <p class="note">n/a: the previous value was 0 or missing, so a percentage change cannot be calculated. Arrows show direction only.</p>
+          <table id="cat-table"><thead><tr><th>Category</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exception Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Impact Change (%)</th></tr></thead><tbody id="cat-body"></tbody></table>
+          <p class="note tblnote">n/a: no percentage change is shown because the previous value was 0. Arrows show direction only.</p>
         </div>
 
         <h2>Location Change</h2>
         <div class="panel">
           <div class="empty" id="loc-empty" hidden></div>
-          <table id="loc-table"><thead><tr><th>Location</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exceptions Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Impact % Change</th></tr></thead><tbody id="loc-body"></tbody></table>
-          <p class="note">n/a: the previous value was 0 or missing, so a percentage change cannot be calculated. Arrows show direction only.</p>
+          <table id="loc-table"><thead><tr><th>Location</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exception Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Impact Change (%)</th></tr></thead><tbody id="loc-body"></tbody></table>
+          <p class="note tblnote">n/a: no percentage change is shown because the previous value was 0. Arrows show direction only.</p>
         </div>
 
         <h2>Recurring Issue Change</h2>
         <div class="panel">
           <div class="empty" id="issue-empty" hidden></div>
-          <table id="issue-table"><thead><tr><th>Category</th><th>Issue Type</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exceptions Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th></tr></thead><tbody id="issue-body"></tbody></table>
-          <p class="note">Category and issue type, top 10 by size of the impact change (increases and decreases). Groups with no change are left out.</p>
+          <table id="issue-table"><thead><tr><th>Category</th><th>Issue Type</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exception Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th></tr></thead><tbody id="issue-body"></tbody></table>
+          <p class="note tblnote">The 10 category and issue-type groups with the largest change in impact minutes, increases and decreases. Groups with no change are not listed.</p>
         </div>
 
         <h2>Hotspot Movement</h2>
@@ -280,55 +285,55 @@
           <h3 class="sub2">Highest Decreases</h3>
           <div class="empty" id="hdown-empty" hidden></div>
           <table id="hdown-table"><thead><tr><th>Category</th><th>Location</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th></tr></thead><tbody id="hdown-body"></tbody></table>
-          <p class="note">Category and location combinations, top 5 each way by change in impact minutes.</p>
+          <p class="note">The 5 category and location combinations with the largest change in impact minutes in each direction.</p>
         </div>
 
         <h2>Management Review Candidates</h2>
         <div class="panel">
           <div class="empty" id="cand-empty" hidden></div>
-          <table id="cand-table"><thead><tr><th>Category</th><th>Issue Type</th><th>Location</th><th class="n">Current Count</th><th class="n">Previous Count</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Current Reopened</th><th class="n">Previous Reopened</th><th>Latest Occurrence</th></tr></thead><tbody id="cand-body"></tbody></table>
+          <table id="cand-table"><thead><tr><th>Category</th><th>Issue Type</th><th>Location</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Current Reopened</th><th class="n">Previous Reopened</th><th>Latest Occurrence</th></tr></thead><tbody id="cand-body"></tbody></table>
           <p class="note" id="cand-note"></p>
-          <p class="note"><b>These are factual comparison candidates, not automated recommendations.</b>
-            Listed when impact minutes, exceptions or reopened exceptions are higher than in the previous period. Sorted by impact increase, then exception increase, then reopened increase, then latest occurrence. Top 15.</p>
+          <p class="note"><b>These are factual comparison candidates, not automated recommendations.</b></p>
+          <p class="note">A group is listed when its impact minutes, exceptions or reopened exceptions are higher than in the previous period. Sorted by increase in impact, then in exceptions, then in reopened exceptions, then latest occurrence. Up to 15 shown.</p>
         </div>
         </div>
 
         <!-- 5. Hotspots -->
         <h2>Operational Hotspots</h2>
         <div class="hotlist" id="hotspots"></div>
-        <p class="note">Top 5 category and location combinations by total impact minutes.</p>
+        <p class="note">The 5 category and location combinations with the most impact minutes in the selected period.</p>
 
         <!-- 6. Recurring constraints -->
         <h2>Recurring Operational Constraints</h2>
         <div class="panel">
-          <div class="empty" id="constraints-empty" hidden>No exceptions match these filters.</div>
+          <div class="empty" id="constraints-empty" hidden>No exceptions match the selected filters.</div>
           <table id="constraints-table">
             <thead><tr>
-              <th>Category</th><th>Issue Type</th><th>Location</th><th class="n">Exception Count</th>
-              <th class="n">Total Impact Minutes</th><th class="n">Average Impact Minutes</th>
-              <th class="n">Resolved Count</th><th class="n">Reopened Count</th><th>Last Occurrence</th>
+              <th>Category</th><th>Issue Type</th><th>Location</th><th class="n">Exceptions</th>
+              <th class="n">Total Impact (min)</th><th class="n">Average Impact (min)</th>
+              <th class="n">Resolved</th><th class="n">Reopened</th><th>Latest Occurrence</th>
             </tr></thead>
             <tbody id="constraints-body"></tbody>
           </table>
           <button type="button" class="linkbtn" id="constraints-more" hidden></button>
-          <p class="note">Grouped by category, issue type and location. Sorted by total impact minutes, then exception count. Top 15 shown by default.</p>
+          <p class="note">Grouped by category, issue type and location and ranked by total impact minutes, then number of exceptions. The top 15 are shown.</p>
         </div>
 
         <!-- 7. Response and closure performance -->
         <h2>Response &amp; Closure Performance</h2>
         <div class="stats">
-          <div class="card"><div class="n" id="p-median-start">-</div><div class="t">Median Time to Start</div><div class="s" id="p-median-start-sub"></div></div>
-          <div class="card"><div class="n" id="p-median-resolve">-</div><div class="t">Median Time to Resolve</div><div class="s" id="p-median-resolve-sub"></div></div>
+          <div class="card"><div class="n" id="p-median-start">-</div><div class="t">Median Time from Reporting to Start of Work</div><div class="s" id="p-median-start-sub"></div></div>
+          <div class="card"><div class="n" id="p-median-resolve">-</div><div class="t">Median Time from Reporting to Resolution</div><div class="s" id="p-median-resolve-sub"></div></div>
           <div class="card"><div class="n" id="p-resolved">-</div><div class="t">Percentage Resolved</div><div class="s" id="p-resolved-sub"></div></div>
           <div class="card"><div class="n" id="p-reopened">-</div><div class="t">Percentage Reopened</div><div class="s" id="p-reopened-sub"></div></div>
         </div>
 
         <div class="cmp">
-        <h3 class="sub2">Current and previous period</h3>
+        <h3 class="sub2">Current versus Previous Period</h3>
         <div class="panel">
           <div class="empty" id="perf-empty" hidden></div>
           <table id="perf-table"><thead><tr><th>Measure</th><th class="n">Current</th><th class="n">Previous</th><th class="n">Change</th></tr></thead><tbody id="perf-body"></tbody></table>
-          <p class="note">Percentages are compared in percentage points (current minus previous), not as a percentage change. Increased and Decreased are descriptive words only.</p>
+          <p class="note">Resolved and reopened shares are compared in percentage points (current minus previous). Increased and Decreased describe direction only.</p>
         </div>
         </div>
 
@@ -341,63 +346,77 @@
           </table>
         </div>
         <div class="cmp">
-        <h3 class="sub2">Priority comparison</h3>
+        <h3 class="sub2">Priority Comparison</h3>
         <div class="panel">
           <div class="empty" id="prio-empty" hidden></div>
-          <table id="prio-table"><thead><tr><th>Current priority</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exceptions Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th></tr></thead><tbody id="prio-body"></tbody></table>
+          <table id="prio-table"><thead><tr><th>Current priority</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exception Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th></tr></thead><tbody id="prio-body"></tbody></table>
         </div>
         </div>
         <h2>Priority Changes</h2>
         <div class="stats">
-          <div class="card"><div class="n" id="priority-changes">-</div><div class="t">Exceptions with a priority change</div><div class="s" id="priority-changes-sub"></div><div class="cmp" id="priority-changes-cmp"></div></div>
+          <div class="card"><div class="n" id="priority-changes">-</div><div class="t">Exceptions with a Priority Change</div><div class="s" id="priority-changes-sub"></div><div class="cmp" id="priority-changes-cmp"></div></div>
         </div>
 
         <!-- 9. Phase E: forecast readiness (data sufficiency only; no forecast) -->
         <h2>Forecast Readiness</h2>
         <div class="panel">
-          <p class="note" style="margin-top:0">Checks whether the filtered historical dataset meets the prototype data-sufficiency requirements for attempting a <b>later</b> forecast. No forecast is made on this page.
-            The states describe data sufficiency only, measured against prototype engineering thresholds (listed at the end of this section). They are not an operational rating, and Ready does not mean the data is statistically validated or that a later forecast would be accurate or reliable.
-            The date range filter limits the history that is assessed: choose Last 90 days or All time to assess more history.</p>
-          <div class="ready-head" style="margin-top:12px"><h3>Overall Forecast Readiness</h3><span class="rbadge" id="r-overall-badge"></span></div>
-          <ul class="rlist" id="r-overall-reasons"></ul>
+          <p class="note intro" style="margin-top:0">Forecast Readiness checks whether the filtered history meets the prototype data-sufficiency requirements for attempting a later forecast. It does not generate a forecast.</p>
+          <p class="note intro">&ldquo;Ready&rdquo; only means these prototype requirements are met; it does not imply statistical validation or guaranteed forecast accuracy. Readiness changes with the selected filters and date range. Use Last 90 days or All time to assess a longer history.</p>
+          <div class="ready-head" style="margin-top:14px"><h3>Overall Forecast Readiness</h3><span class="rbadge" id="r-overall-badge"></span></div>
+          <p class="rsum" id="r-overall-summary"></p>
+          <p class="note" id="r-overall-note"></p>
         </div>
         <div class="ready-grid">
           <div class="panel">
             <div class="ready-head"><h3>Exception Count Forecast</h3><span class="rbadge" id="r-count-badge"></span></div>
             <p class="rsum" id="r-count-sum"></p>
+            <h4 class="rlabel">Evidence</h4>
+            <ul class="rlist" id="r-count-evidence"></ul>
+            <h4 class="rlabel" id="r-count-reason-label">Reason</h4>
             <ul class="rlist" id="r-count-reasons"></ul>
           </div>
           <div class="panel">
             <div class="ready-head"><h3>Impact Minutes Forecast</h3><span class="rbadge" id="r-impact-badge"></span></div>
             <p class="rsum" id="r-impact-sum"></p>
+            <h4 class="rlabel">Evidence</h4>
+            <ul class="rlist" id="r-impact-evidence"></ul>
+            <h4 class="rlabel" id="r-impact-reason-label">Reason</h4>
             <ul class="rlist" id="r-impact-reasons"></ul>
           </div>
           <div class="panel">
             <div class="ready-head"><h3>Time-to-Start Forecast</h3><span class="rbadge" id="r-start-badge"></span></div>
             <p class="rsum" id="r-start-sum"></p>
+            <h4 class="rlabel">Evidence</h4>
+            <ul class="rlist" id="r-start-evidence"></ul>
+            <h4 class="rlabel" id="r-start-reason-label">Reason</h4>
             <ul class="rlist" id="r-start-reasons"></ul>
           </div>
           <div class="panel">
             <div class="ready-head"><h3>Time-to-Resolve Forecast</h3><span class="rbadge" id="r-resolve-badge"></span></div>
             <p class="rsum" id="r-resolve-sum"></p>
+            <h4 class="rlabel">Evidence</h4>
+            <ul class="rlist" id="r-resolve-evidence"></ul>
+            <h4 class="rlabel" id="r-resolve-reason-label">Reason</h4>
             <ul class="rlist" id="r-resolve-reasons"></ul>
           </div>
         </div>
+        <p class="note" id="r-lifecycle-note" hidden></p>
         <h3 class="sub2">Readiness Notes</h3>
-        <div class="panel"><ul id="r-notes"></ul></div>
+        <div class="panel"><ul id="r-notes"></ul>
+          <p class="note">Readiness describes data sufficiency only. It is not a forecast.</p></div>
 
         <h2>Historical Coverage</h2>
         <div class="stats" id="cov-cards"></div>
-        <p class="note">Span = latest calendar day minus earliest calendar day of the filtered exceptions, plus 1 (your local dates). Zero-event days = span minus distinct active days; this is descriptive only. Weeks are ISO weeks (Monday to Sunday).</p>
+        <p class="note">The span runs from the earliest to the latest exception, counting both days (your local dates). Zero-event days are days within that span with no exception; this is descriptive only. Weeks run Monday to Sunday (ISO weeks).</p>
 
         <h2>Data Concentration</h2>
         <div class="stats" id="conc-cards"></div>
-        <p class="note">Descriptive only. Shares of impact minutes use the filtered exceptions; the issue type share uses the number of exceptions.</p>
+        <p class="note">Descriptive only. Impact shares are shares of total recorded impact minutes; the issue type share is a share of the number of exceptions.</p>
 
         <h2>Recurrence Coverage</h2>
         <div class="panel">
           <table id="rec-table">
-            <thead><tr><th>Category</th><th class="n">Exceptions</th><th class="n">Distinct Days</th><th class="n">Distinct Locations</th><th class="n">Issue Types</th></tr></thead>
+            <thead><tr><th>Category</th><th class="n">Exceptions</th><th class="n">Days with Exceptions</th><th class="n">Locations</th><th class="n">Issue Types</th></tr></thead>
             <tbody id="rec-body"></tbody>
           </table>
         </div>
@@ -405,18 +424,19 @@
 
         <div class="panel" style="margin-top:14px">
           <details class="thr">
-            <summary>Prototype engineering thresholds (data sufficiency, not operational or statistical thresholds)</summary>
+            <summary>Prototype engineering thresholds (data sufficiency only; not operational or statistical thresholds)</summary>
             <table id="thr-table" style="margin-top:8px">
-              <thead><tr><th>Measure</th><th>Not Ready when</th><th>Ready when</th></tr></thead>
+              <thead><tr><th>Forecast type</th><th>Not Ready if</th><th>Ready if all of these are met</th></tr></thead>
               <tbody id="thr-body"></tbody>
             </table>
-            <p class="note">Otherwise Limited. Overall is Ready only when Exception Count and Impact Minutes are both Ready, Not Ready when either is Not Ready, otherwise Limited. Time-to-start and time-to-resolve have their own readiness. There is no score. Time durations use the current cycle of each exception; reopened multi-cycle durations are not reconstructed.</p>
+            <p class="note">If a forecast type is neither Not Ready nor Ready, it is Limited. Overall Forecast Readiness is Ready only when Exception Count and Impact Minutes are both Ready, Not Ready when either is Not Ready, and Limited otherwise. Time-to-Start and Time-to-Resolve have their own readiness. There is no score.</p>
+            <p class="note">An active day is a day with at least one exception. The calendar span counts every day from the earliest to the latest exception. Times from reporting to start of work and to resolution use each exception&rsquo;s current lifecycle fields; earlier cycles of reopened exceptions are not reconstructed.</p>
           </details>
         </div>
 
         <p class="note" style="margin-top:18px">
-          The period filters by the date each exception was created (your local time). Time to Start uses the current start time and
-          Time to Resolve uses the current resolve time of Resolved records. An exception that was reopened and worked again counts once;
+          Periods are based on the date each exception was reported (your local time). Times from reporting to start of work and to resolution
+          use each exception&rsquo;s current start and resolution times. An exception that was reopened and worked again counts once;
           its earlier cycles are not added up separately.
         </p>
       </div>
