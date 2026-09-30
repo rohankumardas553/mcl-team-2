@@ -371,6 +371,36 @@
 - NOT YET (later phases only, when asked): forecasting itself, confidence ranges,
   anomaly detection, AI or LLM recommendations, automated decisions.
 
+## Management Overview structure (analytics.html; presentation only)
+- PURPOSE: analytics.html opens as a "Management Overview" that answers the main
+  management questions in about 30 seconds. The analytical machinery of Phases C, D
+  and E is unchanged and is kept, in two collapsed layers. This is an information
+  architecture change only: no calculation, sort order, threshold, readiness state,
+  filter, date period, database read, SQL, permission, auth.js or other page changed.
+- LEVEL 1 (visible by default, about 3 screens on a laptop): title and filters; a small
+  period box; 6 cards (Exceptions, Recorded Impact, Average Impact per Exception,
+  Response Time, Resolution Time, Reopened Issues), each with ONE line "Previous: X ·
+  change (percent)" when a comparison exists; Management Summary (the Phase D factual
+  sentences, renamed); two trend charts (Exceptions Over Time, Recorded Impact Over
+  Time, with the previous-period dashed line); "Where is the operational impact?" (top 5
+  locations by impact minutes, top 5 recurring issues by exceptions); Items for
+  Management Review (first 5 of the existing candidate list, "View all" opens the full
+  table); Data Available for Future Forecasting (four rows: Ready = "Enough data",
+  Limited = "More history needed", Not Ready = "Not enough data").
+- LEVEL 2 ("View Detailed Analysis", collapsed): the four other charts, Category,
+  Location, Recurring Issue Change, Hotspot Movement, the full Management Review
+  Candidates table, Operational Hotspots, Recurring Operational Constraints, Response &
+  Closure Performance, Priority Distribution, Priority Comparison, Priority Changes.
+- LEVEL 3 ("Methodology & Data Details", collapsed, inside Level 2): the exact Ready /
+  Limited / Not Ready states with evidence and reasons, lifecycle note, Readiness Notes,
+  Historical Coverage, Data Concentration, Recurrence Coverage, the threshold table and
+  the period / lifecycle footnote.
+- RULES: every section is still filled on every load (filters update hidden sections
+  too); the element ids are unchanged; everything in Level 2 and 3 is only hidden inside
+  <details>. The plain forecast labels exist only in the compact Level 1 block. The
+  Management Review list and the comparison parts are hidden for All time as before.
+  dashboard.html stays the operational "what needs action now" page.
+
 ## Wording conventions on the Analytics page (presentation only)
 - Audience: a management presentation. Sentences must read naturally, say each
   thing once, and never sound like program output. This is wording only: the
@@ -490,3 +520,4 @@
 - Phase D period comparison (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). Compares the selected period with the immediately preceding period of the same length (custom ranges too; not for All time): Period Comparison banner, comparison lines on the 6 KPI cards, Strategic Management Attention (up to 5 factual sentences), Category Change, Location Change, Recurring Issue Change, Hotspot Movement (increases and decreases), Management Review Candidates (factual list, not recommendations), Response & Closure comparison (percentage points), Priority comparison and Priority Changes, dashed previous-period line on the trend charts (periods up to 90 days). Read-only; one bulk read covers both periods. No forecasting and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not added up. Tested against a scratch local Postgres copy with 2,326 demo rows; not tested on the live Supabase.
 - Phase E forecast readiness (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no function, no extra database request, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). New "Forecast Readiness" section: Not Ready / Limited / Ready for Exception Count, Impact Minutes, Time-to-Start and Time-to-Resolve forecasts, each with written factual reasons, plus an overall state, Readiness Notes, Historical Coverage, Data Concentration and Recurrence Coverage. Prototype engineering thresholds (data sufficiency, not operational or statistical) are shown on the page and listed above. Ready does not mean statistically validated, accurate or reliable. Reusable gate for a later phase: MineAnalytics.assessReadiness and isReady. NO forecasting, no scores and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not reconstructed. Tested against a scratch local Postgres copy with 2,326 demo rows and hand-built boundary datasets; not tested on the live Supabase.
 - Analytics language and readability pass (Claude): wording and layout of the text on analytics.html only (analytics.js and analytics.html). No calculation, sort order, threshold, readiness state, filter, query, permission, SQL or other page changed. Natural comparison sentences (period named once above the list), one set of terms for the time measures, shorter readiness cards (evidence plus a reason only when Limited or Not Ready), one shared lifecycle note, clearer overall readiness text, consistent labels in Historical Coverage, Data Concentration and Recurrence Coverage, grammatical threshold text, plain empty and no-comparison messages, consistent dates and numbers. Tested on the fictional presentation data in a scratch copy; not tested on the live Supabase.
+- Management Overview restructure (Claude): analytics.html, analytics.js and CLAUDE.md only. The page now opens as a "Management Overview" (6 cards with one-line comparisons, Management Summary, two trend charts, top 5 impact locations and recurring issues, 5 review items, plain-language data availability for forecasting) with everything else kept under "View Detailed Analysis" and, inside it, "Methodology & Data Details". No calculation, threshold, readiness state, filter, query, permission, SQL or other page changed. Tested against a scratch local Postgres copy with the 09 presentation demo data (814 rows); not tested on the live Supabase.
