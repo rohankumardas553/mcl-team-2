@@ -36,6 +36,10 @@
     #msg { margin-top: 16px; padding: 14px; border-radius: 10px; display: none; word-wrap: break-word; }
     #msg.ok { display: block; background: #dcfce7; color: #14532d; border: 2px solid #16a34a; font-weight: bold; }
     #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
+    #goto { display: block; margin-top: 12px; padding: 16px; min-height: 54px; text-align: center; font-weight: bold;
+      color: #0b2a5b; background: #fff; border: 2px solid #0b2a5b; border-radius: 12px; text-decoration: none; }
+    #goto[hidden] { display: none; }
+    @media (min-width: 700px) { main { max-width: 640px; } }
     footer { text-align: center; padding: 20px 16px; font-size: 14px; color: #0b2a5b; }
   </style>
 </head>
@@ -89,6 +93,7 @@
       <button type="submit" id="save">Add Exception</button>
     </form>
     <div id="msg" role="status"></div>
+    <a id="goto" href="dashboard.html" hidden>See it on the Dashboard &rarr;</a>
   </main>
   <footer>Training prototype &ndash; all data is made up</footer>
 
@@ -108,7 +113,8 @@
     var msg = document.getElementById("msg");
     var save = document.getElementById("save");
 
-    function show(kind, text) { msg.className = kind; msg.textContent = text; }
+    function show(kind, text) { msg.className = kind; msg.textContent = text;
+      document.getElementById("goto").hidden = (kind !== "ok"); }
 
     category.addEventListener("change", function () {
       var list = ISSUES[category.value] || [];
