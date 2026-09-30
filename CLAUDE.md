@@ -10,8 +10,8 @@
 
 ## What we are building
 - A tool with at most 4 pages: index.html (entry page), dashboard.html
-  (dashboard: what needs action now), analytics.html (historical analytics for
-  management) and login.html (sign in). The shared helper file auth.js and the
+  (dashboard: what needs action now), analytics.html (historical analytics and
+  period comparison for management) and login.html (sign in). The shared helper file auth.js and the
   analytics code file analytics.js are not pages.
 - Every record has location, priority (Low / Medium / High) and status
   (Open / In progress / Resolved), plus the columns in "Our tool" below.
@@ -189,7 +189,7 @@
 - PRIORITY: distribution counts and total impact by current_priority (High,
   Medium, Low; "Not recorded" only if any exist). Priority Changes = exceptions
   with at least one 'priority_changed' audit line. No severity is inferred.
-- MANAGEMENT ATTENTION: up to 3 fixed-pattern factual sentences, no AI, no
+- MANAGEMENT ATTENTION (Phase C wording; replaced by "Strategic Management Attention" in Phase D, see below): up to 3 fixed-pattern factual sentences, no AI, no
   prediction, no advice, no invented thresholds: (1) the category + location
   with the highest total impact, (2) the category share of total impact
   minutes, (3) the most recurring issue type; a location fact is used only to
@@ -202,11 +202,94 @@
   to Resolve uses the CURRENT resolved_at of currently Resolved records. Earlier
   cycles are visible only through the audit history and the reopened counts.
 - NOT YET (later phases only, when asked): forecasting, AI recommendations,
-  automated decisions, comparison with a previous period.
+  automated decisions. (Comparison with a previous period was added in Phase D.)
 - PERFORMANCE NOTE: if the data ever becomes too large for the browser,
   first consider narrower default periods; only then consider a database view
   or function, and only one that keeps the same row level security (never a
   SECURITY DEFINER shortcut that bypasses it). Ask before writing SQL.
+
+## Phase D period comparison (in analytics.html and analytics.js)
+- PURPOSE: answer "Compared with the immediately preceding equivalent period, what
+  has changed?" It is a DECISION-SUPPORT view: facts only. No forecasting, no AI
+  recommendations, no automated decisions, no scores, no good/bad labels, no
+  causes, no advice. No new SQL, no new grant, no write of any kind.
+- WHO: exactly as Phase C (Shift In-Charge, Manager, Project Officer, General
+  Manager). The Overman has no menu link, sees "Not authorised" and no data is
+  requested.
+- COMPARISON PERIOD RULE: the previous period has the SAME number of local
+  calendar days as the current one and ends exactly where the current one starts
+  (the two never overlap, nothing is skipped). Last 7 / 30 / 90 days: the 7 / 30 /
+  90 days before the current period. Custom From/To (both days included): if it
+  has N days, the previous period is the N days before From. A one-day custom
+  period is compared with the day before. All time: NO comparison; the page says
+  "Period comparison is not available for All time." and hides all comparison
+  parts. Periods are chosen by created_at (browser local time), stored
+  timestamps never change. Shift, Category and Location filters apply to BOTH
+  periods.
+- DATA: still read-only. ONE bulk read of shift_exceptions covers both periods
+  (they touch each other), read in pages of 1000; ONE bulk read of the audit lines
+  "reopened" and "priority_changed". Then computeAll() splits the rows by
+  created_at and does everything in the browser. The old stale-answer guard is
+  kept: a slow answer never overwrites a newer filter choice.
+- AUDIT CONVENTION (same as Phase C): an exception belongs to the period in which
+  it was CREATED. It counts as reopened if it has at least one "reopened" audit
+  line, and as priority-changed if it has at least one "priority_changed" line,
+  even if that line was written after the period ended. Counted once per
+  exception, not per event.
+- FORMULAS: Change = current - previous, worked out from the SHOWN values
+  (counts and minutes whole numbers, averages and medians one decimal), so a
+  reader can check it. Percentage change = change / previous x 100. Increased /
+  Decreased / No change are descriptive words only (a longer time is "Increased",
+  never "bad").
+- ZERO AND MISSING VALUES: if the previous value is 0 (or a value is missing) NO
+  percentage is calculated (shown as "n/a" or "Percentage change not available");
+  the absolute change is still shown. Never NaN, never Infinity. If an average or
+  median has no data in one period the change reads "Not available".
+- PERCENTAGE POINTS: % Resolved and % Reopened are compared as percentage points
+  (current % minus previous %), e.g. 72.4% vs 66.1% = +6.3 percentage points. They
+  are never shown as a percentage change.
+- WHAT IS COMPARED: the 6 KPI cards (each card also shows Previous, Change and the
+  direction word); Category Change (sorted by impact change, largest increase
+  first, decreases last); Location Change (sorted by the size of the impact change
+  either way; improved locations stay visible); Recurring Issue Change (category +
+  issue type, top 10 by size of impact change, groups with no change left out);
+  Hotspot Movement (category + location; Highest Increases and Highest Decreases,
+  top 5 each; rows with no change are in neither); Response & Closure Performance
+  (average and median time to start and resolve, % Resolved, % Reopened);
+  Priority comparison (current_priority High/Medium/Low: counts and impact) and
+  Priority Changes. Categories and locations with no exceptions in either period
+  are left out of their tables. Ties are ordered by name so the order never changes.
+- TREND CHARTS: for periods of 90 days or less the previous period is drawn as a
+  dashed line under the same day number (day 1 of the previous period lines up
+  with day 1 of the current one). For longer periods (monthly buckets do not line
+  up) there is no overlay.
+- STRATEGIC MANAGEMENT ATTENTION (replaces the Phase C "Management Attention"):
+  at most 5 fixed-pattern factual sentences, made only from computed values, in
+  this order, and each one only if it exists: (1) total impact minutes changed
+  from X to Y; (2) the category + location with the largest increase in impact
+  minutes; (3) the category + location with the largest decrease; (4) the
+  recurring issue type with the largest increase in number of exceptions; (5)
+  average time to start changed from X to Y minutes. Only when fewer than 5 exist
+  are these added in this order: the location with the largest increase, the
+  category with the largest decrease, average time to resolve, reopened
+  exceptions. Ties are stated as ties. No causes, no prediction, no advice, no
+  "should", no thresholds. When it is not possible (All time, or either period has
+  no exceptions): "Not enough comparable historical data for period-over-period
+  analysis." (The Phase C category-share and location facts are no longer in this
+  box; Operational Hotspots and the tables still show that information.)
+- MANAGEMENT REVIEW CANDIDATES: NOT a recommendation engine, no score, no colour
+  rank. Grouped by category + issue type + location. A group is listed when its
+  current impact minutes, OR current number of exceptions, OR current reopened
+  count is higher than in the previous period. Sorted by impact increase, then
+  exception-count increase, then reopened increase (all largest first), then
+  latest occurrence (newest first), then name. Top 15. Columns: current and
+  previous count, impact, reopened, impact change and latest occurrence. It is
+  shown only when both periods have exceptions.
+- LIMITATION (multiple lifecycle cycles): as in Phase C. Time to Start and Time to
+  Resolve use the CURRENT started_at and resolved_at of each record. An exception
+  that was reopened and worked again is one record in the period of its creation.
+- NOT YET (later phases only, when asked): forecasting, confidence ranges,
+  anomaly detection, AI or LLM recommendations, automated decisions.
 
 ## Final lockdown (07-lockdown.sql)
 - WHEN: run it ONLY after the login pages are live on the main branch (Vercel
@@ -266,7 +349,7 @@
 - Problem: Shift problems in Coal Despatch and Dust Suppression are not recorded in one place.
 - Who records / who decides: Shift staff record; shift managers decide (to confirm).
 - Table name and columns: shift_exceptions - id, created_at, shift, location, category, issue_type, description, impact_minutes, urgency, status, resolved_at, plus (from 04) created_by, created_by_role, reported_priority, current_priority, priority_changed_by, priority_changed_by_role, priority_changed_at, priority_change_reason, started_by, started_at, closure_requested_by, closure_requested_at, resolved_by, updated_at, and name snapshots created_by_name, priority_changed_by_name, started_by_name, closure_requested_by_name, resolved_by_name. Other tables: profiles, exception_remarks, exception_audit.
-- Pages: index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics (Shift In-Charge and above); login.html = sign in (helper: auth.js)
+- Pages: index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics and period-to-period comparison (Shift In-Charge and above); login.html = sign in (helper: auth.js)
 
 ## Progress Log (newest entry at the bottom)
 - Phase 0 (starter): placeholder index.html, config.js without settings and
@@ -289,3 +372,4 @@
 - Final lockdown prepared (Claude): database/07-lockdown.sql and database/07-rollback.sql written, NOT run. 07-lockdown.sql removes the old public rules on shift_exceptions, takes all table and function access away from signed-out visitors, leaves signed-in users SELECT only plus the 8 action functions, my_access and app_rank, keeps row level security on for all 4 tables, adds NOT VALID value checks where safe, and ends with one verification table. 07-rollback.sql (EMERGENCY ONLY, re-opens public access) restores only the old open policies and grants on shift_exceptions. Tested against a scratch local Postgres copy set up like the live database: data identical before and after, second run changes nothing, every role and the maker-checker rule still work, direct writes are blocked, and the pages still work. NOT tested on the live Supabase. Must not be run until the login pages are live on main and every role has passed the preview tests.
 - Management reopen (Claude): authority-model correction after the lockdown. A Resolved exception may now be reopened by a Shift In-Charge, Manager (no can_operate needed), Project Officer or General Manager; an Overman still cannot; a reason of 5+ characters is required and the audit line records who, role, Resolved to Open, the reason and the server time. Reopen still clears every current-cycle field (resolved_*, closure_requested_*, started_*, including the name snapshots) and never touches earlier audit or remarks. Start, Decline and Resolve rules, maker-checker and the priority rank lock are unchanged. Done in 04-auth-foundation.sql (fresh setups) and in the small database/08-management-reopen.sql for the live, already locked-down database (replaces ONLY reopen_exception; no table, row, policy or grant change; safe to run twice). database/08-management-reopen-rollback.sql restores the previous rule (Shift In-Charge, or Manager with can_operate). auth.js shows the Reopen button for the four roles. Tested against a scratch local Postgres copy that had 04, 05, 06 and 07 applied, then 08; not tested on the live Supabase.
 - Phase C analytics (Claude): new analytics.html and analytics.js (historical analytics for Shift In-Charge, Manager, Project Officer and General Manager; the Overman gets no menu link and a "Not authorised" message on a manual visit), one line in auth.js to add the Analytics menu item for the "view_analytics" permission, and this CLAUDE.md section. Filters (date range, shift, category, location), 6 KPI cards, rule-based Management Attention, 6 charts, Operational Hotspots, Recurring Operational Constraints table, Response and Closure Performance, Priority Distribution and Priority Changes. Read-only, client-side aggregation of rows the person may already read; NO new SQL, no new grant, no change to the lockdown, maker-checker, reopen authority or priority rules. Known limitation: multiple lifecycle cycles are not added up. No forecasting and no AI recommendations yet. Tested against a scratch local Postgres copy with 2,326 demo rows over about 13 months; not tested on the live Supabase.
+- Phase D period comparison (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). Compares the selected period with the immediately preceding period of the same length (custom ranges too; not for All time): Period Comparison banner, comparison lines on the 6 KPI cards, Strategic Management Attention (up to 5 factual sentences), Category Change, Location Change, Recurring Issue Change, Hotspot Movement (increases and decreases), Management Review Candidates (factual list, not recommendations), Response & Closure comparison (percentage points), Priority comparison and Priority Changes, dashed previous-period line on the trend charts (periods up to 90 days). Read-only; one bulk read covers both periods. No forecasting and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not added up. Tested against a scratch local Postgres copy with 2,326 demo rows; not tested on the live Supabase.

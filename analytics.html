@@ -101,6 +101,15 @@
                background: #fff; border: 2px solid var(--navy); border-radius: 12px; cursor: pointer; }
     .linkbtn:hover { background: var(--navy); color: #fff; }
 
+    /* Phase D: period comparison */
+    .cmp-period { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 17px; margin-bottom: 6px; }
+    .cmp-label { font-weight: 700; min-width: 84px; color: var(--navy); }
+    #cmp-status { margin: 8px 0 0; color: #33466b; font-size: 15px; }
+    .card .cmp { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e3e9f4; font-size: 13px; color: #33466b; }
+    .cmp-chg { font-weight: 700; color: var(--ink); }
+    .cmp-dir { font-weight: 700; color: var(--navy); }
+    .cmp-note { color: #4b5d80; }
+    .sub2 { font-size: 16px; margin: 14px 0 6px; }
     .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
     #msg { padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; margin-bottom: 12px; }
@@ -136,7 +145,7 @@
       td { display: table-cell; padding: 10px; border-bottom: 1px solid #e3e9f4; text-align: left; }
       td.n { text-align: right; }
       td::before { content: none; }
-      #constraints-table tbody tr:hover, #priority-table tbody tr:hover { background: #f3f6fb; }
+      table tbody tr:hover { background: #f3f6fb; }
     }
   </style>
 </head>
@@ -154,7 +163,7 @@
   <main>
     <div class="title">
       <h1>Analytics</h1>
-      <p>Which recurring operational constraints cost the most time, where they happen, and whether the pattern is changing.</p>
+      <p>Which recurring operational constraints cost the most time, where they happen, and what has changed compared with the previous period.</p>
     </div>
     <div id="msg" role="status"></div>
 
@@ -190,21 +199,28 @@
       <div id="loading">Loading analytics...</div>
 
       <div id="content" hidden>
-        <!-- 2. KPI cards -->
-        <div class="cards">
-          <div class="card"><div class="n" id="k-total">-</div><div class="t">Total Exceptions</div><div class="s" id="k-total-sub"></div></div>
-          <div class="card"><div class="n" id="k-impact">-</div><div class="t">Total Impact Minutes</div><div class="s" id="k-impact-sub"></div></div>
-          <div class="card"><div class="n" id="k-avg">-</div><div class="t">Average Impact per Exception</div><div class="s" id="k-avg-sub"></div></div>
-          <div class="card"><div class="n" id="k-start">-</div><div class="t">Average Time to Start</div><div class="s" id="k-start-sub"></div></div>
-          <div class="card"><div class="n" id="k-resolve">-</div><div class="t">Average Time to Resolve</div><div class="s" id="k-resolve-sub"></div></div>
-          <div class="card"><div class="n" id="k-reopened">-</div><div class="t">Reopened Exceptions</div><div class="s" id="k-reopened-sub"></div></div>
+        <!-- 2. Period comparison -->
+        <h2>Period Comparison</h2>
+        <div class="panel">
+          <div id="cmp-periods"></div>
+          <p id="cmp-status"></p>
         </div>
 
-        <!-- 3. Management attention -->
-        <h2>Management Attention</h2>
+        <!-- 3. KPI cards (current value, with previous value and change below) -->
+        <div class="cards">
+          <div class="card"><div class="n" id="k-total">-</div><div class="t">Total Exceptions</div><div class="s" id="k-total-sub"></div><div class="cmp" id="k-total-cmp"></div></div>
+          <div class="card"><div class="n" id="k-impact">-</div><div class="t">Total Impact Minutes</div><div class="s" id="k-impact-sub"></div><div class="cmp" id="k-impact-cmp"></div></div>
+          <div class="card"><div class="n" id="k-avg">-</div><div class="t">Average Impact per Exception</div><div class="s" id="k-avg-sub"></div><div class="cmp" id="k-avg-cmp"></div></div>
+          <div class="card"><div class="n" id="k-start">-</div><div class="t">Average Time to Start</div><div class="s" id="k-start-sub"></div><div class="cmp" id="k-start-cmp"></div></div>
+          <div class="card"><div class="n" id="k-resolve">-</div><div class="t">Average Time to Resolve</div><div class="s" id="k-resolve-sub"></div><div class="cmp" id="k-resolve-cmp"></div></div>
+          <div class="card"><div class="n" id="k-reopened">-</div><div class="t">Reopened Exceptions</div><div class="s" id="k-reopened-sub"></div><div class="cmp" id="k-reopened-cmp"></div></div>
+        </div>
+
+        <!-- 4. Strategic management attention -->
+        <h2>Strategic Management Attention</h2>
         <div class="panel">
           <ul id="attention"></ul>
-          <p class="note">Facts taken directly from the filtered data. No prediction and no advice.</p>
+          <p class="note">Facts taken directly from the current and previous periods. No prediction, no cause and no advice.</p>
         </div>
 
         <!-- 4. Trend charts -->
@@ -216,6 +232,50 @@
           <div class="panel"><h3>Impact Minutes by Location</h3><div class="chartbox"><canvas id="c-loc"></canvas></div></div>
           <div class="panel"><h3>Exceptions by Shift</h3><div class="chartbox"><canvas id="c-shift"></canvas></div></div>
           <div class="panel"><h3>Top Issue Types (by number of exceptions)</h3><div class="chartbox"><canvas id="c-issue"></canvas></div></div>
+        </div>
+
+        <!-- 6. Phase D comparison sections -->
+        <div class="cmp">
+        <h2>Category Change</h2>
+        <div class="panel">
+          <div class="empty" id="cat-empty" hidden></div>
+          <table id="cat-table"><thead><tr><th>Category</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exceptions Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Impact % Change</th></tr></thead><tbody id="cat-body"></tbody></table>
+          <p class="note">n/a: the previous value was 0 or missing, so a percentage change cannot be calculated. Arrows show direction only.</p>
+        </div>
+
+        <h2>Location Change</h2>
+        <div class="panel">
+          <div class="empty" id="loc-empty" hidden></div>
+          <table id="loc-table"><thead><tr><th>Location</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exceptions Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Impact % Change</th></tr></thead><tbody id="loc-body"></tbody></table>
+          <p class="note">n/a: the previous value was 0 or missing, so a percentage change cannot be calculated. Arrows show direction only.</p>
+        </div>
+
+        <h2>Recurring Issue Change</h2>
+        <div class="panel">
+          <div class="empty" id="issue-empty" hidden></div>
+          <table id="issue-table"><thead><tr><th>Category</th><th>Issue Type</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exceptions Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th></tr></thead><tbody id="issue-body"></tbody></table>
+          <p class="note">Category and issue type, top 10 by size of the impact change (increases and decreases). Groups with no change are left out.</p>
+        </div>
+
+        <h2>Hotspot Movement</h2>
+        <div class="panel">
+          <h3 class="sub2" style="margin-top:0">Highest Increases</h3>
+          <div class="empty" id="hup-empty" hidden></div>
+          <table id="hup-table"><thead><tr><th>Category</th><th>Location</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th></tr></thead><tbody id="hup-body"></tbody></table>
+          <h3 class="sub2">Highest Decreases</h3>
+          <div class="empty" id="hdown-empty" hidden></div>
+          <table id="hdown-table"><thead><tr><th>Category</th><th>Location</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th></tr></thead><tbody id="hdown-body"></tbody></table>
+          <p class="note">Category and location combinations, top 5 each way by change in impact minutes.</p>
+        </div>
+
+        <h2>Management Review Candidates</h2>
+        <div class="panel">
+          <div class="empty" id="cand-empty" hidden></div>
+          <table id="cand-table"><thead><tr><th>Category</th><th>Issue Type</th><th>Location</th><th class="n">Current Count</th><th class="n">Previous Count</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th><th class="n">Current Reopened</th><th class="n">Previous Reopened</th><th>Latest Occurrence</th></tr></thead><tbody id="cand-body"></tbody></table>
+          <p class="note" id="cand-note"></p>
+          <p class="note"><b>These are factual comparison candidates, not automated recommendations.</b>
+            Listed when impact minutes, exceptions or reopened exceptions are higher than in the previous period. Sorted by impact increase, then exception increase, then reopened increase, then latest occurrence. Top 15.</p>
+        </div>
         </div>
 
         <!-- 5. Hotspots -->
@@ -248,6 +308,15 @@
           <div class="card"><div class="n" id="p-reopened">-</div><div class="t">Percentage Reopened</div><div class="s" id="p-reopened-sub"></div></div>
         </div>
 
+        <div class="cmp">
+        <h3 class="sub2">Current and previous period</h3>
+        <div class="panel">
+          <div class="empty" id="perf-empty" hidden></div>
+          <table id="perf-table"><thead><tr><th>Measure</th><th class="n">Current</th><th class="n">Previous</th><th class="n">Change</th></tr></thead><tbody id="perf-body"></tbody></table>
+          <p class="note">Percentages are compared in percentage points (current minus previous), not as a percentage change. Increased and Decreased are descriptive words only.</p>
+        </div>
+        </div>
+
         <!-- 8. Priority distribution -->
         <h2>Priority Distribution</h2>
         <div class="panel">
@@ -256,9 +325,16 @@
             <tbody id="priority-body"></tbody>
           </table>
         </div>
+        <div class="cmp">
+        <h3 class="sub2">Priority comparison</h3>
+        <div class="panel">
+          <div class="empty" id="prio-empty" hidden></div>
+          <table id="prio-table"><thead><tr><th>Current priority</th><th class="n">Current Exceptions</th><th class="n">Previous Exceptions</th><th class="n">Exceptions Change</th><th class="n">Current Impact (min)</th><th class="n">Previous Impact (min)</th><th class="n">Impact Change (min)</th></tr></thead><tbody id="prio-body"></tbody></table>
+        </div>
+        </div>
         <h2>Priority Changes</h2>
         <div class="stats">
-          <div class="card"><div class="n" id="priority-changes">-</div><div class="t">Exceptions with a priority change</div><div class="s" id="priority-changes-sub"></div></div>
+          <div class="card"><div class="n" id="priority-changes">-</div><div class="t">Exceptions with a priority change</div><div class="s" id="priority-changes-sub"></div><div class="cmp" id="priority-changes-cmp"></div></div>
         </div>
 
         <p class="note" style="margin-top:18px">
