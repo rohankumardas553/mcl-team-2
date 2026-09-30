@@ -23,9 +23,22 @@
     nav a:hover { background: rgba(255,255,255,.14); }
     nav a.active { background: #fff; color: var(--navy); }
 
+    .right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+    .who { display: flex; align-items: center; gap: 12px; }
+    .who-text { display: flex; flex-direction: column; line-height: 1.2; text-align: right; }
+    .who-name { font-weight: 700; font-size: 15px; }
+    .who-role { font-size: 13px; color: #c7d2e5; }
+    .who-out { min-height: 44px; padding: 0 16px; font: inherit; font-size: 15px; font-weight: 700; color: #fff;
+               background: transparent; border: 2px solid rgba(255,255,255,.6); border-radius: 10px; cursor: pointer; }
+    .who-out:hover { background: rgba(255,255,255,.14); }
+    .who-out:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+    [hidden] { display: none !important; }
     main { max-width: 720px; margin: 0 auto; padding: 20px 16px 8px; }
     .title h1 { font-size: 28px; margin: 4px 0 4px; }
     .title p { margin: 0 0 16px; color: #33466b; font-size: 16px; }
+    #denied p { margin: 0 0 12px; }
+    #denied a { display: block; text-align: center; padding: 16px; min-height: 56px; font-weight: 700; color: var(--navy);
+                border: 2px solid var(--navy); border-radius: 12px; text-decoration: none; }
 
     .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px;
             margin-bottom: 16px; box-shadow: 0 2px 8px rgba(11, 42, 91, .08); }
@@ -75,7 +88,7 @@
     #save:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
     #save:disabled { opacity: .6; }
 
-    #msg { margin-top: 16px; padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; }
+    #msg { margin-bottom: 12px; padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; }
     #msg.ok { display: block; background: #dcfce7; color: #14532d; border: 2px solid #16a34a; font-weight: 700; }
     #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
     #goto { display: block; margin-top: 12px; padding: 16px; min-height: 56px; text-align: center; font-weight: 700;
@@ -96,10 +109,10 @@
   <header>
     <div class="bar">
       <div class="brand"><span class="mark">MS</span>MineShift Command</div>
-      <nav>
-        <a class="active" href="index.html">Add Shift Exception</a>
-        <a href="dashboard.html">Dashboard</a>
-      </nav>
+      <div class="right">
+        <nav id="nav"></nav>
+        <div class="who" id="who"></div>
+      </div>
     </div>
   </header>
 
@@ -109,7 +122,15 @@
       <p>Coal Despatch, Dust Suppression, Haul Road and Coal Quality. Fill in the three steps and press the button.</p>
     </div>
 
-    <form id="form">
+    <div id="msg" role="status"></div>
+    <a id="goto" href="dashboard.html" hidden>See it on the Dashboard &rarr;</a>
+    <section class="card" id="denied" hidden>
+      <h2>Not available for your role</h2>
+      <p>Your role cannot create operational exceptions.</p>
+      <a id="denied-link" href="dashboard.html">Go to the Dashboard &rarr;</a>
+    </section>
+
+    <form id="form" hidden>
       <section class="card">
         <h2><span class="n">1</span>When and where</h2>
         <div class="field">
@@ -124,10 +145,10 @@
           <label class="label" for="location">Location</label>
           <select id="location" required>
             <option value="">Choose location</option>
-            <option>Coal Face A</option><option>Coal Face B</option>
+            <option>ABC Patch</option><option>XYZ Patch</option>
             <option>Haul Road A</option><option>Haul Road B</option>
-            <option>Junction A</option><option>Stockyard A</option>
-            <option>Siding A</option><option>Siding B</option>
+            <option>MDP Junction</option><option>Stockyard 1</option>
+            <option>Siding 1</option><option>Siding 2</option>
           </select>
         </div>
       </section>
@@ -168,24 +189,23 @@
           </div>
         </div>
         <div class="field">
-          <span class="label" id="urg-label">Urgency</span>
+          <span class="label" id="urg-label">Reported Priority</span>
           <div class="choices three urgency" role="radiogroup" aria-labelledby="urg-label">
-            <label class="choice low"><input type="radio" name="urgency" value="Low" required><span>Low</span></label>
-            <label class="choice medium"><input type="radio" name="urgency" value="Medium"><span>Medium</span></label>
-            <label class="choice high"><input type="radio" name="urgency" value="High"><span>High</span></label>
+            <label class="choice low"><input type="radio" name="priority" value="Low" required><span>Low</span></label>
+            <label class="choice medium"><input type="radio" name="priority" value="Medium"><span>Medium</span></label>
+            <label class="choice high"><input type="radio" name="priority" value="High"><span>High</span></label>
           </div>
         </div>
       </section>
 
       <button type="submit" id="save">Add Exception</button>
     </form>
-    <div id="msg" role="status"></div>
-    <a id="goto" href="dashboard.html" hidden>See it on the Dashboard &rarr;</a>
   </main>
   <footer>Training prototype &ndash; all data is made up</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
+  <script src="auth.js"></script>
   <script>
     var ISSUES = {
       "Coal Despatch": ["Coal shortage", "Tipper shortage", "Loader breakdown",
@@ -239,47 +259,47 @@
       b.addEventListener("click", function () { minutes.value = b.getAttribute("data-min"); });
     });
 
-    var db = null;
-    try {
-      var ready = (window.SUPABASE_URL || "").indexOf("PASTE") === -1 &&
-                  (window.SUPABASE_PUBLISHABLE_KEY || "").indexOf("sb_publishable_") === 0;
-      if (!ready) throw new Error("Database settings in config.js are not filled in yet.");
-      db = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
-    } catch (e) {
-      show("err", "The database is not connected. Please tell the team. Error: " + e.message);
-    }
-
     form.addEventListener("submit", async function (ev) {
       ev.preventDefault();
-      if (!db) { show("err", "The database is not connected, so nothing was saved."); return; }
       var row = {
-        shift: picked("shift"),
-        location: document.getElementById("location").value,
-        category: picked("category"),
-        issue_type: issue.value,
-        description: document.getElementById("description").value.trim(),
-        impact_minutes: parseInt(minutes.value, 10),
-        urgency: picked("urgency"),
-        status: "Open"
-        // created_at is set by the database; resolved_at is left empty.
+        p_shift: picked("shift"),
+        p_location: document.getElementById("location").value,
+        p_category: picked("category"),
+        p_issue_type: issue.value,
+        p_description: document.getElementById("description").value.trim(),
+        p_impact_minutes: parseInt(minutes.value, 10),
+        p_priority: picked("priority")
       };
-      if (!row.description || isNaN(row.impact_minutes) || !row.urgency) {
+      if (!row.p_description || isNaN(row.p_impact_minutes) || !row.p_priority) {
         show("err", "Please fill in every field.");
         return;
       }
       save.disabled = true;
       show("", "");
       try {
-        var res = await db.from("shift_exceptions").insert(row);
+        // The database function records who you are, the time, status Open and both priorities.
+        var res = await MineShift.db.rpc("create_exception", row);
         if (res.error) throw new Error(res.error.message);
         show("ok", "Exception recorded successfully.");
         form.reset();
         fillIssues();
       } catch (e) {
-        show("err", "Sorry, the exception could not be saved. Error: " + e.message);
+        var text = "Sorry, the exception could not be saved. Error: " + e.message;
+        if (MineShift.isSessionError(e.message)) text += " Your sign-in may have ended. Please sign in again.";
+        show("err", text);
       }
       save.disabled = false;
     });
+
+    (async function () {
+      var ctx = await MineShift.start("index");
+      if (!ctx) return;
+      if (MineShift.can("create", ctx.access)) {
+        form.hidden = false;
+      } else {
+        document.getElementById("denied").hidden = false;
+      }
+    })();
   </script>
 </body>
 </html>

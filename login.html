@@ -23,6 +23,15 @@
     nav a:hover { background: rgba(255,255,255,.14); }
     nav a.active { background: #fff; color: var(--navy); }
 
+    .right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+    .who { display: flex; align-items: center; gap: 12px; }
+    .who-text { display: flex; flex-direction: column; line-height: 1.2; text-align: right; }
+    .who-name { font-weight: 700; font-size: 15px; }
+    .who-role { font-size: 13px; color: #c7d2e5; }
+    .who-out { min-height: 44px; padding: 0 16px; font: inherit; font-size: 15px; font-weight: 700; color: #fff;
+               background: transparent; border: 2px solid rgba(255,255,255,.6); border-radius: 10px; cursor: pointer; }
+    .who-out:hover { background: rgba(255,255,255,.14); }
+    .who-out:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
     main { max-width: 560px; margin: 0 auto; padding: 20px 16px 8px; }
     .title h1 { font-size: 28px; margin: 4px 0 4px; }
     .title p { margin: 0 0 16px; color: #33466b; font-size: 16px; }
@@ -67,10 +76,10 @@
   <header>
     <div class="bar">
       <div class="brand"><span class="mark">MS</span>MineShift Command</div>
-      <nav>
-        <a href="index.html">Add Shift Exception</a>
-        <a href="dashboard.html">Dashboard</a>
-      </nav>
+      <div class="right">
+        <nav id="nav"></nav>
+        <div class="who" id="who"></div>
+      </div>
     </div>
   </header>
 
@@ -112,9 +121,8 @@
       <h2>What your role can do</h2>
       <ul class="perms" id="perms"></ul>
       <p class="note">This list is a guide only. The database enforces the real permissions.</p>
-      <p class="note"><b>Phase A:</b> the login foundation is ready. The Add and Dashboard pages do not use your login yet.</p>
       <a class="big secondary" href="dashboard.html">Go to Dashboard</a>
-      <a class="big secondary" href="index.html">Go to Add Shift Exception</a>
+      <a class="big secondary" id="go-add" href="index.html">Go to Add Shift Exception</a>
     </section>
   </main>
   <footer>Training prototype &ndash; all data is made up</footer>
@@ -146,6 +154,8 @@
     ];
 
     function showSignedOut() {
+      $("nav").textContent = "";
+      $("who").textContent = "";
       $("me-name").textContent = "";
       $("me-role").textContent = "";
       $("perms").textContent = "";
@@ -175,6 +185,8 @@
         li.appendChild(document.createTextNode(a[1]));
         list.appendChild(li);
       });
+      $("go-add").hidden = !MineShift.can("create", access);
+      MineShift.mountHeader(access, null);
       $("signin-card").hidden = true;
       $("me-card").hidden = false;
       $("perms-card").hidden = false;

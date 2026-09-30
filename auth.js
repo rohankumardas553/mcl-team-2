@@ -1,4 +1,5 @@
-// auth.js - shared sign-in helper for MineShift Command (login and roles, Phase A).
+// auth.js - shared sign-in helper for MineShift Command (login and roles).
+// Used by login.html, index.html and dashboard.html.
 // Load it AFTER the Supabase script and config.js:
 //   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 //   <script src="config.js"></script>
@@ -109,6 +110,86 @@
     });
   }
 
+  // Which pages each person sees in the menu. Convenience only: the database decides.
+  var PAGES = [
+    { id: "index",     href: "index.html",     label: "Add Shift Exception", action: "create" },
+    { id: "dashboard", href: "dashboard.html", label: "Dashboard",           action: null }
+  ];
+
+  // Fills the shared header: role-aware menu, the person's name and role, and Sign out.
+  // Expects <nav id="nav"></nav> and <div class="who" id="who"></div> in the page header.
+  function mountHeader(access, activeId) {
+    var nav = document.getElementById("nav");
+    var who = document.getElementById("who");
+    if (nav) {
+      nav.textContent = "";
+      PAGES.forEach(function (p) {
+        if (p.action && !can(p.action, access)) return;
+        var a = document.createElement("a");
+        a.href = p.href;
+        a.textContent = p.label;
+        if (p.id === activeId) a.className = "active";
+        nav.appendChild(a);
+      });
+    }
+    if (who) {
+      who.textContent = "";
+      var text = document.createElement("div");
+      text.className = "who-text";
+      var name = document.createElement("span");
+      name.className = "who-name";
+      name.textContent = access.full_name;
+      var role = document.createElement("span");
+      role.className = "who-role";
+      var r = ROLES[access.role];
+      role.textContent = r ? r.label : access.role;
+      text.appendChild(name);
+      text.appendChild(role);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "who-out";
+      btn.textContent = "Sign out";
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        try { await signOut(); } catch (e) { /* leave anyway */ }
+        window.location.replace("login.html");
+      });
+      who.appendChild(text);
+      who.appendChild(btn);
+    }
+  }
+
+  // One call for every protected page: needs a signed-in person with an active role,
+  // fills the header, and leaves for login.html if the session ends.
+  // Returns { session, access } or null (when it has redirected or shown a problem).
+  // Shows problems in an element with id="msg".
+  async function start(activeId) {
+    var box = document.getElementById("msg");
+    function problem(text) {
+      if (box) { box.className = "err"; box.textContent = text; }
+    }
+    if (!state.ready) {
+      problem("The database is not connected. Please tell the team. Error: " + state.error);
+      return null;
+    }
+    try {
+      var ctx = await requireLogin();
+      if (!ctx) return null;
+      mountHeader(ctx.access, activeId);
+      onSignedOut(function () { window.location.replace("login.html"); });
+      return ctx;
+    } catch (e) {
+      problem("Sorry, the sign-in check did not work. Error: " + e.message +
+              " You can try signing in again.");
+      return null;
+    }
+  }
+
+  // Tells you if an error message means "your sign-in has ended".
+  function isSessionError(message) {
+    return /jwt|token|not authenticated|session/i.test(String(message || ""));
+  }
+
   window.MineShift = {
     ROLES: ROLES,
     get db() { return state.db; },
@@ -120,6 +201,9 @@
     loadAccess: loadAccess,
     can: can,
     requireLogin: requireLogin,
-    onSignedOut: onSignedOut
+    onSignedOut: onSignedOut,
+    mountHeader: mountHeader,
+    start: start,
+    isSessionError: isSessionError
   };
 })();
