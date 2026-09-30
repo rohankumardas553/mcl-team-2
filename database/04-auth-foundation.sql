@@ -495,13 +495,17 @@ begin
 end
 $$;
 
--- REOPEN: Shift In-Charge, Manager only when can_operate. Resolved -> Open, reason required.
+-- REOPEN: Shift In-Charge, Manager, Project Officer, General Manager (a Manager does NOT need
+-- can_operate for this). Reopening after an inspection or review is a supervisory / managerial
+-- intervention, not routine closure. An Overman / Supervisor can NOT reopen. Resolved -> Open,
+-- reason of 5+ characters required. Any of these roles may reopen regardless of who resolved it;
+-- the mandatory reason and the immutable audit line give the accountability.
 create or replace function public.reopen_exception(p_id uuid, p_reason text)
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_a public.profiles := public.app_actor(); v_e public.shift_exceptions;
 begin
   perform set_config('app.in_rpc', '1', true);
-  if not (v_a.role = 'shift_incharge' or (v_a.role = 'manager' and v_a.can_operate)) then
+  if v_a.role not in ('shift_incharge', 'manager', 'project_officer', 'general_manager') then
     raise exception 'Your role (%) cannot reopen an exception.', public.role_label(v_a.role); end if;
   if p_reason is null or char_length(btrim(p_reason)) < 5 then
     raise exception 'Please give a reason of at least 5 characters.'; end if;

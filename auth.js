@@ -77,7 +77,8 @@
       case "request_closure":    return r === "overman" || r === "shift_incharge";
       case "decline_closure":    return r === "shift_incharge" || (r === "manager" && op);
       case "resolve":            return r === "shift_incharge" || (r === "manager" && op);
-      case "reopen":             return r === "shift_incharge" || (r === "manager" && op);
+      // Reopen after an inspection or review: Shift In-Charge and every management role. No can_operate needed.
+      case "reopen":             return r === "shift_incharge" || r === "manager" || r === "project_officer" || r === "general_manager";
       case "change_priority":    return access.rank >= 2;
       case "remark_operational": return r === "overman" || r === "shift_incharge";
       case "remark_management":  return r === "manager" || r === "project_officer" || r === "general_manager";
