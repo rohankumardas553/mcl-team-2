@@ -61,8 +61,10 @@
   folder: 01-setup.sql, then 02-..., 03-..., 04-... for later changes.
   Order so far: 01, 02, 03 (demo data), 04 (auth foundation), 05 (location
   renames), 06 (closure confirmation fix, for a database that already ran 04),
-  then 07-lockdown.sql (final security lockdown) and 07-rollback.sql
-  (EMERGENCY ONLY - it re-opens public access). See "Final lockdown" below.
+  07-lockdown.sql (final security lockdown) and 07-rollback.sql (EMERGENCY ONLY
+  - it re-opens public access), then 08-management-reopen.sql (higher
+  authorities may reopen; for a database that already ran 04 and 07) with
+  08-management-reopen-rollback.sql to undo it. See "Final lockdown" below.
 - Tables (all in the public schema): shift_exceptions (the records),
   profiles (who each login account is and its role), exception_remarks
   (remarks) and exception_audit (history). Every table has
@@ -91,9 +93,19 @@
   separate "Project Manager" role.
 - Create: Overman, Shift In-Charge. Start: Overman, Shift In-Charge, Manager
   only when can_operate. Request closure (note of 5+ characters): Overman,
-  Shift In-Charge. Decline closure (reason), Resolve, Reopen (reason,
-  Resolved to Open): Shift In-Charge, Manager only when can_operate. Resolve
-  without a closure request needs a resolution note of 5+ characters.
+  Shift In-Charge. Decline closure (reason) and Resolve: Shift In-Charge,
+  Manager only when can_operate. Resolve without a closure request needs a
+  resolution note of 5+ characters.
+- Reopen (Resolved to Open, reason of 5+ characters): Shift In-Charge,
+  Manager, Project Officer and General Manager. A Manager does NOT need
+  can_operate to reopen. An Overman / Supervisor can NOT reopen. Reason: a
+  higher authority may reopen a closed issue that is found wrong during an
+  inspection or review; that is a supervisory or managerial intervention, not
+  routine operational closure. Any of these roles may reopen regardless of who
+  resolved it (no rank lock for reopening). The mandatory reason and the
+  immutable audit line (who, role, when, why) give the accountability.
+  A Manager without can_operate, a Project Officer and a General Manager still
+  cannot Start, Decline or Resolve.
 - Maker-checker: whoever requested a closure can NOT decline it or confirm it
   (Resolve) themselves. Another Shift In-Charge, or a Manager with can_operate,
   must do it. Enforced in the database (decline_closure, resolve_exception).
@@ -201,3 +213,4 @@
 - Login and roles, Phase B (Claude): index.html and dashboard.html are now role-aware and use auth.js. Not signed in, no profile or an inactive profile sends you to login.html. Header shows name, role and Sign out; menu is role-aware (Manager, Project Officer and General Manager see Dashboard only). Entry page: only Overman and Shift In-Charge; others see "Your role cannot create operational exceptions"; field renamed Reported Priority; saves with the create_exception function; final location names only. Dashboard: Overman sees active list, My history (resolved records he created), filters, remarks, closure state and permitted buttons, but no cards, Top 3, chart, management remarks or audit. Shift In-Charge and above see 3 cards, Top 3, chart, all records, history (audit) and their buttons. Everything uses current_priority; reported and current priority, who set it, when and why are shown. Every change goes through the database functions (start_exception, request_closure, decline_closure, resolve_exception, reopen_exception, change_priority, add_remark); database errors are shown on the card. No database change in Phase B. Tested against a scratch local Postgres copy driven through the real pages, not the live Supabase. Old location names may still appear inside the description text of older demo records (05 changes only the location field). Next: Data Keeper runs 04 and 05 and creates the accounts, team tests every role on the Vercel preview, then merge, then 07-lockdown.sql (not written yet).
 - Maker-checker fix (Claude): live testing found that a Shift In-Charge could confirm or decline their own closure request. Now decline_closure and resolve_exception reject the action when the caller is the person who requested the closure ("You cannot confirm or decline your own closure request. Another Shift In-Charge or authorised Manager must review it."). A Manager with can_operate may still review a Shift In-Charge or Overman request; an Overman still cannot decline or resolve; with NO closure request a Shift In-Charge can still resolve directly with a note of 5+ characters. Fixed in 04-auth-foundation.sql (fresh setups) and in the small new database/06-closure-confirmation-fix.sql (replaces only those two functions; for the database that already ran 04; no table or data change). dashboard.html shows the requester "Awaiting confirmation by another authorised officer." instead of Decline / Confirm Resolved. The future lockdown files are now 07-lockdown.sql and 07-rollback.sql (not written). New migration order: backup, 04, accounts, 04 again, 05, 06, test every role on the preview, merge, 07-lockdown, full permission test. Tested against a scratch local Postgres copy, not the live Supabase.
 - Final lockdown prepared (Claude): database/07-lockdown.sql and database/07-rollback.sql written, NOT run. 07-lockdown.sql removes the old public rules on shift_exceptions, takes all table and function access away from signed-out visitors, leaves signed-in users SELECT only plus the 8 action functions, my_access and app_rank, keeps row level security on for all 4 tables, adds NOT VALID value checks where safe, and ends with one verification table. 07-rollback.sql (EMERGENCY ONLY, re-opens public access) restores only the old open policies and grants on shift_exceptions. Tested against a scratch local Postgres copy set up like the live database: data identical before and after, second run changes nothing, every role and the maker-checker rule still work, direct writes are blocked, and the pages still work. NOT tested on the live Supabase. Must not be run until the login pages are live on main and every role has passed the preview tests.
+- Management reopen (Claude): authority-model correction after the lockdown. A Resolved exception may now be reopened by a Shift In-Charge, Manager (no can_operate needed), Project Officer or General Manager; an Overman still cannot; a reason of 5+ characters is required and the audit line records who, role, Resolved to Open, the reason and the server time. Reopen still clears every current-cycle field (resolved_*, closure_requested_*, started_*, including the name snapshots) and never touches earlier audit or remarks. Start, Decline and Resolve rules, maker-checker and the priority rank lock are unchanged. Done in 04-auth-foundation.sql (fresh setups) and in the small database/08-management-reopen.sql for the live, already locked-down database (replaces ONLY reopen_exception; no table, row, policy or grant change; safe to run twice). database/08-management-reopen-rollback.sql restores the previous rule (Shift In-Charge, or Manager with can_operate). auth.js shows the Reopen button for the four roles. Tested against a scratch local Postgres copy that had 04, 05, 06 and 07 applied, then 08; not tested on the live Supabase.
