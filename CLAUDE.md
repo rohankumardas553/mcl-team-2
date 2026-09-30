@@ -9,9 +9,10 @@
   time. The Progress Log at the end of this file is our handover logbook.
 
 ## What we are building
-- A tool with at most 3 pages: index.html (entry page), dashboard.html
-  (dashboard) and login.html (sign in). The shared helper file auth.js is not
-  a page.
+- A tool with at most 4 pages: index.html (entry page), dashboard.html
+  (dashboard: what needs action now), analytics.html (historical analytics for
+  management) and login.html (sign in). The shared helper file auth.js and the
+  analytics code file analytics.js are not pages.
 - Every record has location, priority (Low / Medium / High) and status
   (Open / In progress / Resolved), plus the columns in "Our tool" below.
 - The tool is now a role-based operational decision-support PROTOTYPE with
@@ -134,6 +135,79 @@
   manager2 (can_operate), po1, gm1 at example.com. Passwords are set by the Data
   Keeper in Supabase and are never stored in this repository.
 
+## Phase C analytics (analytics.html and analytics.js)
+- PURPOSE: answer the management question "What recurring operational
+  constraints are causing the greatest loss of time, where are they occurring,
+  and are they improving or worsening?" using only data already in
+  shift_exceptions and exception_audit. It is analytics ONLY: no forecasting,
+  no AI recommendations, no automated decisions and no writes.
+- WHO: Shift In-Charge, Manager, Project Officer, General Manager (the same
+  people who can already see all records and the audit trail; role rank 2 and
+  above, the "view_analytics" permission in auth.js). An Overman does not see
+  the Analytics menu link, and opening analytics.html by hand shows "Not
+  authorised" and requests no data. The database rules (RLS, lockdown) are
+  unchanged: the page only SELECTs rows the person is already allowed to read.
+  There is NO new SQL, view, function or grant for Phase C.
+- HOW: two bulk reads (shift_exceptions filtered by the chosen period, shift,
+  category and location, read in pages of 1000 rows; then exception_audit lines
+  with action "reopened" or "priority_changed"), then all numbers are worked out
+  in the browser by compute() in analytics.js. No read per record.
+- FILTERS: Date range (Last 7 days, Last 30 days (default), Last 90 days, All
+  time, Custom From and To), Shift, Category, Location. Last N days = today
+  plus the N-1 days before it (local calendar days). Custom From and To are
+  both included. Everything on the page follows the filters.
+- CREATED_AT RULE: the selected period filters exceptions by created_at
+  (browser local time). Lifecycle numbers (start, resolve) are then taken from
+  the records that were created in that period. Stored timestamps are never changed.
+- REOPENED RULE: an exception counts as reopened if it has at least one
+  exception_audit line with action = 'reopened' (at any time, even after the
+  period ended). Reopen Count of a group = its reopened exceptions, not events.
+- KPI DEFINITIONS: Total Exceptions = count. Total Impact Minutes = sum of
+  impact_minutes. Average Impact = total impact / total exceptions. Average Time
+  to Start = mean of (started_at - created_at) in minutes over exceptions that
+  have started_at. Average Time to Resolve = mean of (resolved_at - created_at)
+  over currently Resolved exceptions that have resolved_at. Reopened Exceptions =
+  reopened count. When there is no data the page shows a dash and "No data".
+- CHART DEFINITIONS: Exceptions Created Over Time and Impact Minutes Over Time
+  (line; daily buckets when the range is 90 days or less, monthly buckets for
+  longer ranges; All time uses the span from the first record). Impact Minutes by
+  Category, by Location (bars). Exceptions by Shift (bars). Top Issue Types
+  (horizontal bars, top 10 by number of exceptions; issue types are grouped
+  inside their category because "Other", "Weather" and "Water tanker required"
+  exist in more than one category).
+- RECURRING OPERATIONAL CONSTRAINTS: group by category + issue type + location;
+  columns Count, Total Impact, Average Impact, Resolved Count (currently
+  Resolved), Reopened Count, Last Occurrence (latest created_at). Sorted by total
+  impact minutes, then count (then name, so the order never changes between
+  reloads). Top 15 by default with a "Show all" button.
+- OPERATIONAL HOTSPOTS: top 5 category + location combinations by total impact
+  minutes (then count). No overall good/bad score.
+- RESPONSE AND CLOSURE PERFORMANCE: median time to start, median time to
+  resolve (same records as the averages; the median of an even count is the mean
+  of the two middle values), Percentage Resolved = currently Resolved / total,
+  Percentage Reopened = reopened / total (one decimal).
+- PRIORITY: distribution counts and total impact by current_priority (High,
+  Medium, Low; "Not recorded" only if any exist). Priority Changes = exceptions
+  with at least one 'priority_changed' audit line. No severity is inferred.
+- MANAGEMENT ATTENTION: up to 3 fixed-pattern factual sentences, no AI, no
+  prediction, no advice, no invented thresholds: (1) the category + location
+  with the highest total impact, (2) the category share of total impact
+  minutes, (3) the most recurring issue type; a location fact is used only to
+  fill a missing slot. A statement is left out when there is nothing to compare
+  (fewer than two groups) or the impact is zero. Ties are stated as ties. If
+  nothing can be said: "Not enough historical data for a meaningful comparison."
+- LIMITATION (multiple lifecycle cycles): an exception can be reopened and
+  worked again. Phase C does NOT add up the cycles. Time to Start uses the
+  CURRENT started_at (cleared by a reopen until it is started again), and Time
+  to Resolve uses the CURRENT resolved_at of currently Resolved records. Earlier
+  cycles are visible only through the audit history and the reopened counts.
+- NOT YET (later phases only, when asked): forecasting, AI recommendations,
+  automated decisions, comparison with a previous period.
+- PERFORMANCE NOTE: if the data ever becomes too large for the browser,
+  first consider narrower default periods; only then consider a database view
+  or function, and only one that keeps the same row level security (never a
+  SECURITY DEFINER shortcut that bypasses it). Ask before writing SQL.
+
 ## Final lockdown (07-lockdown.sql)
 - WHEN: run it ONLY after the login pages are live on the main branch (Vercel
   production) and every role has passed the preview tests. The old public pages
@@ -192,7 +266,7 @@
 - Problem: Shift problems in Coal Despatch and Dust Suppression are not recorded in one place.
 - Who records / who decides: Shift staff record; shift managers decide (to confirm).
 - Table name and columns: shift_exceptions - id, created_at, shift, location, category, issue_type, description, impact_minutes, urgency, status, resolved_at, plus (from 04) created_by, created_by_role, reported_priority, current_priority, priority_changed_by, priority_changed_by_role, priority_changed_at, priority_change_reason, started_by, started_at, closure_requested_by, closure_requested_at, resolved_by, updated_at, and name snapshots created_by_name, priority_changed_by_name, started_by_name, closure_requested_by_name, resolved_by_name. Other tables: profiles, exception_remarks, exception_audit.
-- Pages: index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; login.html = sign in (helper: auth.js)
+- Pages: index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics (Shift In-Charge and above); login.html = sign in (helper: auth.js)
 
 ## Progress Log (newest entry at the bottom)
 - Phase 0 (starter): placeholder index.html, config.js without settings and
@@ -214,3 +288,4 @@
 - Maker-checker fix (Claude): live testing found that a Shift In-Charge could confirm or decline their own closure request. Now decline_closure and resolve_exception reject the action when the caller is the person who requested the closure ("You cannot confirm or decline your own closure request. Another Shift In-Charge or authorised Manager must review it."). A Manager with can_operate may still review a Shift In-Charge or Overman request; an Overman still cannot decline or resolve; with NO closure request a Shift In-Charge can still resolve directly with a note of 5+ characters. Fixed in 04-auth-foundation.sql (fresh setups) and in the small new database/06-closure-confirmation-fix.sql (replaces only those two functions; for the database that already ran 04; no table or data change). dashboard.html shows the requester "Awaiting confirmation by another authorised officer." instead of Decline / Confirm Resolved. The future lockdown files are now 07-lockdown.sql and 07-rollback.sql (not written). New migration order: backup, 04, accounts, 04 again, 05, 06, test every role on the preview, merge, 07-lockdown, full permission test. Tested against a scratch local Postgres copy, not the live Supabase.
 - Final lockdown prepared (Claude): database/07-lockdown.sql and database/07-rollback.sql written, NOT run. 07-lockdown.sql removes the old public rules on shift_exceptions, takes all table and function access away from signed-out visitors, leaves signed-in users SELECT only plus the 8 action functions, my_access and app_rank, keeps row level security on for all 4 tables, adds NOT VALID value checks where safe, and ends with one verification table. 07-rollback.sql (EMERGENCY ONLY, re-opens public access) restores only the old open policies and grants on shift_exceptions. Tested against a scratch local Postgres copy set up like the live database: data identical before and after, second run changes nothing, every role and the maker-checker rule still work, direct writes are blocked, and the pages still work. NOT tested on the live Supabase. Must not be run until the login pages are live on main and every role has passed the preview tests.
 - Management reopen (Claude): authority-model correction after the lockdown. A Resolved exception may now be reopened by a Shift In-Charge, Manager (no can_operate needed), Project Officer or General Manager; an Overman still cannot; a reason of 5+ characters is required and the audit line records who, role, Resolved to Open, the reason and the server time. Reopen still clears every current-cycle field (resolved_*, closure_requested_*, started_*, including the name snapshots) and never touches earlier audit or remarks. Start, Decline and Resolve rules, maker-checker and the priority rank lock are unchanged. Done in 04-auth-foundation.sql (fresh setups) and in the small database/08-management-reopen.sql for the live, already locked-down database (replaces ONLY reopen_exception; no table, row, policy or grant change; safe to run twice). database/08-management-reopen-rollback.sql restores the previous rule (Shift In-Charge, or Manager with can_operate). auth.js shows the Reopen button for the four roles. Tested against a scratch local Postgres copy that had 04, 05, 06 and 07 applied, then 08; not tested on the live Supabase.
+- Phase C analytics (Claude): new analytics.html and analytics.js (historical analytics for Shift In-Charge, Manager, Project Officer and General Manager; the Overman gets no menu link and a "Not authorised" message on a manual visit), one line in auth.js to add the Analytics menu item for the "view_analytics" permission, and this CLAUDE.md section. Filters (date range, shift, category, location), 6 KPI cards, rule-based Management Attention, 6 charts, Operational Hotspots, Recurring Operational Constraints table, Response and Closure Performance, Priority Distribution and Priority Changes. Read-only, client-side aggregation of rows the person may already read; NO new SQL, no new grant, no change to the lockdown, maker-checker, reopen authority or priority rules. Known limitation: multiple lifecycle cycles are not added up. No forecasting and no AI recommendations yet. Tested against a scratch local Postgres copy with 2,326 demo rows over about 13 months; not tested on the live Supabase.
