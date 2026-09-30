@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Team tool - coming soon</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #1f2937;
+           max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    .box { border: 2px dashed #c2410c; border-radius: 12px; padding: 20px; }
+    .ok { color: #047857; font-weight: bold; }
+    .warn { color: #b45309; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Our team's tool is coming soon</h1>
+    <p>This placeholder page will be replaced in Phase 1 of the workshop.</p>
+    <p id="config-check">Checking database settings...</p>
+  </div>
+  <script src="config.js"></script>
+  <script>
+    var el = document.getElementById("config-check");
+    var url = window.SUPABASE_URL || "";
+    var key = window.SUPABASE_PUBLISHABLE_KEY || "";
+    var ready = url.indexOf("PASTE") === -1 && key.indexOf("sb_publishable_") === 0;
+    el.textContent = ready ? "Database settings: filled in \u2713"
+                           : "Database settings: not filled in yet (this is normal before Phase 1)";
+    el.className = ready ? "ok" : "warn";
+  </script>
+</body>
+</html>
