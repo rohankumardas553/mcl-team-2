@@ -82,3 +82,4 @@
 - Phase 0 (starter): placeholder index.html, config.js without settings and
   this CLAUDE.md. Next: Phase 1 - the table and the entry page.
 - Phase 1 (Claude): entry page index.html (Add Shift Exception) for Coal Despatch and Dust Suppression only; database/01-setup.sql (non-destructive, adds 12 demo rows). Works: not yet tested live. Known problems: config.js still has placeholder URL and key. Next: Data Keeper runs 01-setup.sql; team fills config.js; then test on live site.
+- Phase 2 (Claude): dashboard.html - 4 number cards (not resolved, High not resolved, impact minutes and exceptions for last 14 days), one stacked bar chart of impact minutes per day by category, list of latest 10 exceptions. Added Dashboard link to menu on both pages. No database change. Works: not yet tested live. Known problems: none known; still needs config.js filled and 01-setup.sql run. Next: team tests dashboard; later phases (Start/Resolve, OVERDUE, Top 3) not built.
