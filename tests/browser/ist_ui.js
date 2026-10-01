@@ -54,6 +54,6 @@ const lastRpc=()=>[...OPLOG].reverse().find(o=>o.name==='create_exception');
  // Overman form works the same
  { const p=await open('overman1@example.com','index.html','2026-10-01T17:30:00'); const b=await box(p); check('Overman: form shows Second at 17:30',b.shift==='Second'&&!b.hidden,b); await p.close(); }
  // mobile
- { const p=await open('sic1@example.com','index.html','2026-10-01T17:30:00',{width:390,height:800}); const o=await p.evaluate(()=>({sw:document.documentElement.scrollWidth,iw:innerWidth})); check('390px form: no sideways scroll',o.sw<=o.iw,o); await p.screenshot({path:'ist_form_390.png'}); await p.close(); }
+ { const p=await open('sic1@example.com','index.html','2026-10-01T17:30:00',{width:390,height:800}); const o=await p.evaluate(()=>({sw:document.documentElement.scrollWidth,iw:innerWidth})); check('390px form: no sideways scroll',o.sw<=o.iw,o); await p.screenshot({path:require('os').tmpdir()+'/'+'ist_form_390.png'}); await p.close(); }
  await done();
 })();

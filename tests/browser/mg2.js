@@ -11,9 +11,9 @@ const VIS=`const V=e=>e.getClientRects().length>0 && !e.closest('details:not([op
    const p=await newPage('gm1@example.com',{width:w,height:h}); await p.goto(URL); await T(p,3000);
    const m=async()=>p.evaluate(()=>({sw:document.documentElement.scrollWidth,iw:innerWidth,H:document.documentElement.scrollHeight,
      over:[...document.querySelectorAll('body *')].filter(e=>e.tagName!=='CANVAS'&&e.offsetParent!==null&&!e.closest('details:not([open])')&&e.getBoundingClientRect().right>innerWidth+1).map(e=>e.tagName+'#'+e.id+'.'+e.className).slice(0,4)}));
-   const a=await m(); await p.screenshot({path:`mg_${w}_collapsed.png`,fullPage:true});
-   await p.click('#detail > summary'); await T(p,600); const b=await m(); await p.screenshot({path:`mg_${w}_detail.png`,fullPage:true});
-   await p.click('#method > summary'); await T(p,600); const c=await m(); await p.screenshot({path:`mg_${w}_method.png`,fullPage:true});
+   const a=await m(); await p.screenshot({path:require('os').tmpdir()+'/'+`mg_${w}_collapsed.png`,fullPage:true});
+   await p.click('#detail > summary'); await T(p,600); const b=await m(); await p.screenshot({path:require('os').tmpdir()+'/'+`mg_${w}_detail.png`,fullPage:true});
+   await p.click('#method > summary'); await T(p,600); const c=await m(); await p.screenshot({path:require('os').tmpdir()+'/'+`mg_${w}_method.png`,fullPage:true});
    for(const [n,x] of [['collapsed',a],['detailed',b],['methodology',c]]) check(`${w}px ${n}: no sideways scroll (scrollWidth ${x.sw} <= ${x.iw}), height ${x.H}`,x.sw<=x.iw&&x.over.length===0,JSON.stringify(x.over));
    check(`${w}px no page errors`,p.errs.length===0,p.errs.join(';'));
    await p.close();

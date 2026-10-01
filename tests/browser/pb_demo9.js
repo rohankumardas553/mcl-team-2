@@ -12,7 +12,7 @@ const HIDE=process.env.FORCE_NIGHT?'true':(()=>{const cur=psql("select public.is
  let b=await badges(p); check('All time, no filter: overall / count / impact / start / resolve = Ready x5',JSON.stringify(b)===JSON.stringify(['Ready','Ready','Ready','Ready','Ready']),b);
  await p.selectOption('#f-cat','Coal Despatch'); await T(p,2200); b=await badges(p); check('All time, Coal Despatch = Ready x5',b.every(x=>x==='Ready'),b);
  await p.selectOption('#f-cat','Coal Quality'); await p.selectOption('#f-loc','Stockyard 1'); await T(p,2200); b=await badges(p); check('Coal Quality @ Stockyard 1 = Limited (overall)',b[0]==='Limited',b);
- await p.screenshot({path:'demo_limited.png',fullPage:false});
+ await p.screenshot({path:require('os').tmpdir()+'/'+'demo_limited.png',fullPage:false});
  await p.selectOption('#f-loc','Siding 2'); await T(p,2200); b=await badges(p); check('Coal Quality @ Siding 2 = Not Ready (overall)',b[0]==='Not Ready',b);
  await p.click('#f-reset'); await T(p,2500); b=await badges(p); check('Default Last 30 days = Limited overall (history under 56 days)',b[0]==='Limited',b);
  await p.selectOption('#f-range','90'); await T(p,2500); b=await badges(p); check('Last 90 days = Ready x5',b.every(x=>x==='Ready'),b);
@@ -24,7 +24,7 @@ const HIDE=process.env.FORCE_NIGHT?'true':(()=>{const cur=psql("select public.is
  const exp=psql(`select count(*) from shift_exceptions where ${HIDE}`).out; check('dashboard lists every exception (paged read) = '+exp,String(s.items)===exp,[s.items,exp]);
  const kOpen=psql(`select count(*) from shift_exceptions where status in ('Open','In progress') and ${HIDE}`).out; check('dashboard Open Exceptions card = SQL ('+kOpen+')',s.cards[0]===kOpen,s.cards);
  check('dashboard shows Top 3 and no error',s.top3===3&&!/Sorry/.test(s.err),s);
- await d.screenshot({path:'demo_dash.png',fullPage:false});
+ await d.screenshot({path:require('os').tmpdir()+'/'+'demo_dash.png',fullPage:false});
  console.log('=== Overman sees his own history from the demo');
  const o=await newPage('overman1@example.com',{width:1280,height:900}); await o.goto(URL+'dashboard.html'); await T(o,3500);
  const act=psql(`select count(*) from shift_exceptions where status<>'Resolved' and ${HIDE}`).out; const n1=await o.evaluate(()=>document.querySelectorAll('#list > .item').length); check('overman1 active list = all '+act+' active exceptions',String(n1)===act,[n1,act]);

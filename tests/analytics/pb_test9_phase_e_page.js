@@ -111,7 +111,7 @@ async function verify(p,label,preset,f,t,fl){ const E=exp(whereFor(preset,f,t,fl
      heads:['rec-table','thr-table'].map(id=>getComputedStyle(document.querySelector('#'+id+' thead')).display),cardOver:[...document.querySelectorAll('.card')].filter(c=>c.scrollWidth>c.clientWidth+1).length}));
    check(`${w}px: readiness section has no sideways scrolling`,s.over.length===0&&s.sw<=s.iw+1&&s.cardOver===0,s);
    check(`${w}px: readiness tables ${w<1000?'stack into cards':'are real tables'}`,s.heads.every(x=>(w<1000)===(x==='none')),s.heads);
-   if(w===390||w===1280){ const el=await m.$('h2:has-text("Forecast Readiness")'); await el.scrollIntoViewIfNeeded(); await m.screenshot({path:`e${w}.png`,fullPage:false}); }
+   if(w===390||w===1280){ const el=await m.$('h2:has-text("Forecast Readiness")'); await el.scrollIntoViewIfNeeded(); await m.screenshot({path:require('os').tmpdir()+'/'+`e${w}.png`,fullPage:false}); }
    check(`${w}px: no page errors`,m.errs.length===0,m.errs.join(';')); await m.close(); }
  const css=fs.readFileSync((REPO+'/analytics.html'),'utf8').split('\n').filter(l=>/rbadge/.test(l)).join('\n');
  check('readiness badge colours avoid red/green traffic-light colours',!/#dc2626|#16a34a|#22c55e|#ef4444|red|green/i.test(css),css);

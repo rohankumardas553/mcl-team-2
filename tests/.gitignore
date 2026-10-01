@@ -1,0 +1,3 @@
+# screenshots and other test output are written to the system temp folder, never into the repository
+*.png
+tests/out/

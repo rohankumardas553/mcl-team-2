@@ -30,7 +30,7 @@ const unres=`status<>'Resolved'`;
  check(`Old unresolved exceptions are still listed and labelled "From <shift> shift · <day>" (${carried})`,d.carry===carried&&carried>0,[d.carry,carried]);
  const oldHigh=psql(`select id from shift_exceptions where ${unres} and current_priority='High' and ((created_at at time zone 'Asia/Kolkata') - interval '5 hours')::date < '2026-10-01' order by impact_minutes desc limit 1`).out;
  check('an old High unresolved item is present with its action buttons',await p.evaluate(id=>{const it=document.querySelector(`[data-id="${id}"]`);return !!it&&it.querySelectorAll('.act').length>0;},oldHigh));
- await p.screenshot({path:'ist_dash_1280_1730.png'});
+ await p.screenshot({path:require('os').tmpdir()+'/'+'ist_dash_1280_1730.png'});
  // previous operational day: Night available
  await p.selectOption('#f-day','day'); await p.fill('#f-date','2026-09-30'); await p.dispatchEvent('#f-date','change'); await T(p,500); d=await dash(p);
  let o2=Object.fromEntries(d.opts.map(x=>[x[0],x]));
@@ -87,9 +87,9 @@ const unres=`status<>'Resolved'`;
 
  console.log('=== mobile 390px');
  { const q=await open('sic1@example.com','dashboard.html','2026-10-01T17:30:00',{width:390,height:800}); const e=await dash(q);
-   check('390px: no sideways scroll',e.sw<=e.iw,[e.sw,e.iw]); await q.screenshot({path:'ist_dash_390_1730.png'});
+   check('390px: no sideways scroll',e.sw<=e.iw,[e.sw,e.iw]); await q.screenshot({path:require('os').tmpdir()+'/'+'ist_dash_390_1730.png'});
    const h=await q.evaluate(()=>Math.round(document.getElementById('clockbar').getBoundingClientRect().height)); check('390px: clock bar is compact (<=110px)',h<=110,h);
-   await q.evaluate(()=>document.getElementById('f-shift').scrollIntoView()); await q.screenshot({path:'ist_dash_390_filters.png'});
+   await q.evaluate(()=>document.getElementById('f-shift').scrollIntoView()); await q.screenshot({path:require('os').tmpdir()+'/'+'ist_dash_390_filters.png'});
    await q.close(); }
  console.log('=== analytics');
  { const q=await open('gm1@example.com','analytics.html','2026-10-01T17:30:00'); const a=await q.evaluate(()=>({note:document.getElementById('partial-note').hidden?'':document.getElementById('partial-note').textContent,shiftOpts:[...document.getElementById('f-shift').options].map(o=>o.disabled)}));

@@ -20,7 +20,7 @@ function sane(id,x,vw){ // rendered at a normal size, in proportion, not blank
   // B: open
   await p.click('#detail > summary'); await T(p,800); i=await info(p);
   for(const id of ALL) check(`${vw}px B open: ${id} normal size, not blank`,sane(id,i[id],vw),JSON.stringify(i[id]));
-  await p.screenshot({path:`real_${vw}_open.png`,fullPage:true});
+  await p.screenshot({path:require('os').tmpdir()+'/'+`real_${vw}_open.png`,fullPage:true});
   // C: close + reopen
   await p.click('#detail > summary'); await T(p,400); await p.click('#detail > summary'); await T(p,800); i=await info(p);
   for(const id of ALL) check(`${vw}px C reopen: ${id} still correct`,sane(id,i[id],vw),JSON.stringify(i[id]));
@@ -28,7 +28,7 @@ function sane(id,x,vw){ // rendered at a normal size, in proportion, not blank
   await p.click('#method > summary'); await T(p,600);
   const sw=await p.evaluate(()=>document.documentElement.scrollWidth); check(`${vw}px D methodology: no sideways scroll`,sw<=vw,sw);
   i=await info(p); for(const id of ALL) check(`${vw}px D: ${id} unchanged after opening methodology`,sane(id,i[id],vw),JSON.stringify(i[id]));
-  await p.screenshot({path:`real_${vw}_method.png`,fullPage:true});
+  await p.screenshot({path:require('os').tmpdir()+'/'+`real_${vw}_method.png`,fullPage:true});
   // E: change filters while closed, then reopen
   await p.click('#method > summary'); await p.click('#detail > summary'); await T(p,400);
   const cases=[['90','All','Coal Despatch','All'],['all','All','Coal Quality','Stockyard 1'],['30','Night','All','All']];

@@ -143,8 +143,8 @@ async function verify(p,label,preset,f,t,fl){ const W=whereFor(preset,f,t,fl); c
    const s=await m.evaluate(()=>({over:[...document.querySelectorAll('body *')].filter(e=>e.tagName!=='CANVAS'&&e.getBoundingClientRect().right>innerWidth+1).map(e=>e.tagName+'.'+e.className).slice(0,4),thead:getComputedStyle(document.querySelector('#constraints-table thead')).display,sw:document.documentElement.scrollWidth,iw:innerWidth}));
    check(`${w}px: nothing sticks out sideways`, s.over.length===0&&s.sw<=s.iw+1, s);
    check(`${w}px: table ${w<1000?'stacks into cards (no header row)':'shows as a real table'}`, (w<1000)===(s.thead==='none'), s.thead);
-   if(w===390) await m.screenshot({path:'an390.png',fullPage:false});
-   if(w===1280) await m.screenshot({path:'an1280.png',fullPage:true});
+   if(w===390) await m.screenshot({path:require('os').tmpdir()+'/'+'an390.png',fullPage:false});
+   if(w===1280) await m.screenshot({path:require('os').tmpdir()+'/'+'an1280.png',fullPage:true});
    check(`${w}px: no page errors`, m.errs.length===0, m.errs.join(';')); await m.close();
  }
  check('no page errors (gm1 session)', p.errs.length===0, p.errs.join(';'));

@@ -122,8 +122,8 @@ const readCmp=async p=>p.evaluate(()=>{
       cardOver:[...document.querySelectorAll('.card')].filter(c=>c.scrollWidth>c.clientWidth+1).length}));
    check(`${wd}px: no sideways scrolling (page and cards)`,s.over.length===0&&s.sw<=s.iw+1&&s.cardOver===0,s);
    check(`${wd}px: comparison tables ${wd<1000?'stack into cards':'are real tables'}`,s.heads.every(x=>(wd<1000)===(x==='none')),s.heads);
-   if(wd===390) await m.screenshot({path:'d390.png',fullPage:true});
-   if(wd===1280) await m.screenshot({path:'d1280.png',fullPage:true});
+   if(wd===390) await m.screenshot({path:require('os').tmpdir()+'/'+'d390.png',fullPage:true});
+   if(wd===1280) await m.screenshot({path:require('os').tmpdir()+'/'+'d1280.png',fullPage:true});
    check(`${wd}px: no page errors`,m.errs.length===0,m.errs.join(';')); await m.close();
  }
  console.log('=== 21. Overman: still refused, still no data');
