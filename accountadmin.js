@@ -19,6 +19,8 @@
     "#admin-panel { margin-top: 24px; }" +
     "#admin-panel > summary { cursor: pointer; font-weight: 800; font-size: 18px; padding: 14px; min-height: 48px; background: #fff; border: 2px solid #0b2a5b; border-radius: 12px; }" +
     "#admin-panel .ad-body { padding: 12px 0; }" +
+    "#admin-panel.page { margin-top: 0; }" +
+    "#admin-panel.page > summary, #admin-panel.page .ad-note { display: none; }" +   // the page title already says this
     ".ad-note { font-size: 15px; color: #33466b; margin: 0 0 10px; }" +
     ".ad-row { padding: 12px; margin-bottom: 10px; background: #fff; border: 1px solid #d7deee; border-radius: 12px; word-wrap: break-word; }" +
     ".ad-row.off { background: #f3f4f6; }" +
@@ -127,7 +129,7 @@
     }
 
     panel.addEventListener("toggle", function () { if (panel.open && !panel.__loaded) { panel.__loaded = true; load(); } });
-    if (opts && opts.open) panel.open = true;
+    if (opts && opts.open) { panel.classList.add("page"); panel.open = true; }
     return panel;
   }
 
