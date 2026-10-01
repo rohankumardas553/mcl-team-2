@@ -183,7 +183,8 @@
     var startMins = [], resolveMins = [];
 
     var byCat = {}, byLoc = {}, byShift = {}, combos = {}, groups = {}, issues = {};
-    CATEGORIES.forEach(function (c) { byCat[c] = { name: c, count: 0, minutes: 0 }; });
+    var activeCat = {};   // exceptions of this period that are not Resolved (for the composition donuts)
+    CATEGORIES.forEach(function (c) { byCat[c] = { name: c, count: 0, minutes: 0 }; activeCat[c] = { name: c, count: 0, minutes: 0 }; });
     LOCATIONS.forEach(function (l) { byLoc[l] = { name: l, count: 0, minutes: 0 }; });
     SHIFTS.forEach(function (x) { byShift[x] = { name: x, count: 0, minutes: 0 }; });
     var priority = { High: { count: 0, minutes: 0 }, Medium: { count: 0, minutes: 0 },
@@ -210,6 +211,11 @@
       if (!byLoc[r.location]) byLoc[r.location] = { name: r.location, count: 0, minutes: 0 };
       if (!byShift[r.shift]) byShift[r.shift] = { name: r.shift, count: 0, minutes: 0 };
       [byCat[r.category], byLoc[r.location], byShift[r.shift]].forEach(function (b) { b.count += 1; b.minutes += m; });
+
+      if (r.status !== "Resolved") {
+        var ac = activeCat[r.category] || (activeCat[r.category] = { name: r.category, count: 0, minutes: 0 });
+        ac.count += 1; ac.minutes += m;
+      }
 
       var pk = PRIORITIES.indexOf(r.current_priority) >= 0 ? r.current_priority : "none";
       priority[pk].count += 1; priority[pk].minutes += m;
@@ -261,6 +267,7 @@
         .concat(Object.keys(byLoc).filter(function (k) { return LOCATIONS.indexOf(k) < 0; }).map(function (k) { return byLoc[k]; })),
       byShift: SHIFTS.map(function (x) { return byShift[x]; })
         .concat(Object.keys(byShift).filter(function (k) { return SHIFTS.indexOf(k) < 0; }).map(function (k) { return byShift[k]; })),
+      activeByCategory: Object.keys(activeCat).map(function (k) { return activeCat[k]; }),
       topIssues: issuesAll.slice(0, 10),
       issuesAll: issuesAll,
       hotspotsAll: hotspotsAll,
@@ -928,14 +935,14 @@
 
   var NAVY = "#0b2a5b", BLUE = "#8aa4d6", MID = "#3b6bb5", GREY = "#5b7a99", AMBER = "#f59e0b";
 
-  function chart(id, config, hasData) {
+  function chart(id, config, hasData, emptyText) {
     var box = $(id).parentNode;
     var note = box.querySelector(".nodata");
     if (note) note.remove();
     if (charts[id]) { charts[id].destroy(); charts[id] = null; }
     if (!hasData) {
       $(id).style.display = "none";
-      box.appendChild(el("div", "nodata", "No exceptions match the selected filters."));
+      box.appendChild(el("div", "nodata", emptyText || "No exceptions match the selected filters."));
       return;
     }
     $(id).style.display = "";
@@ -971,6 +978,33 @@
       options: { responsive: true, maintainAspectRatio: false, indexAxis: horizontal ? "y" : "x",
         plugins: { legend: { display: false } },
         scales: horizontal ? { x: { beginAtZero: true, ticks: { precision: 0 } } } : { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    };
+  }
+
+  // Composition (share of a whole) charts. The legend shows the real value and its percentage of the total, so the
+  // numbers can be read without hovering. The total is the sum of the slices, so the percentages add up to 100.
+  var DONUT_COLORS = [NAVY, AMBER, MID, BLUE, "#c2410c", GREY];
+  function donutConfig(labels, data, unit) {
+    var total = data.reduce(function (a, b) { return a + b; }, 0);
+    function pctOf(v) { return total ? (v / total * 100).toFixed(1) + "%" : "0.0%"; }
+    return {
+      type: "doughnut",
+      data: { labels: labels, datasets: [{ data: data, backgroundColor: labels.map(function (_, i) { return DONUT_COLORS[i % DONUT_COLORS.length]; }),
+        borderColor: "#ffffff", borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: "55%",
+        plugins: {
+          legend: { position: "bottom", labels: { boxWidth: 14, font: { size: 13 },
+            generateLabels: function (c) {
+              return c.data.labels.map(function (l, i) {
+                var v = c.data.datasets[0].data[i];
+                return { text: l + ": " + num(v) + " (" + pctOf(v) + ")", fillStyle: DONUT_COLORS[i % DONUT_COLORS.length],
+                  strokeStyle: "#ffffff", lineWidth: 1, index: i, hidden: c.getDataVisibility ? !c.getDataVisibility(i) : false };
+              });
+            } } },
+          tooltip: { callbacks: { label: function (ctx) {
+            var v = ctx.parsed; return ctx.label + ": " + num(v) + " " + unit + " (" + pctOf(v) + " of " + num(total) + ")";
+          } } }
+        } }
     };
   }
 
@@ -1389,6 +1423,14 @@
     var hasChartData = r.total > 0 || (ov && result.prev && result.prev.total > 0);
     chart("c-created", lineConfig(s.labels, s.counts, "Exceptions", NAVY, ov ? ov.counts : null), hasChartData);
     chart("c-impact", lineConfig(s.labels, s.impact, "Impact minutes", AMBER, ov ? ov.impact : null), hasChartData);
+    // Composition of what is still unresolved (exceptions created in the selected period that are not Resolved)
+    var act = r.activeByCategory;
+    var actCount = act.filter(function (x) { return x.count > 0; });
+    var actMin = act.filter(function (x) { return x.minutes > 0; });
+    chart("c-act-count", donutConfig(actCount.map(function (x) { return x.name; }), actCount.map(function (x) { return x.count; }), "exceptions"),
+      actCount.length > 0, "No unresolved exceptions in the selected period.");
+    chart("c-act-impact", donutConfig(actMin.map(function (x) { return x.name; }), actMin.map(function (x) { return x.minutes; }), "impact minutes"),
+      actMin.length > 0, "No unresolved impact minutes in the selected period.");
     chart("c-cat", barConfig(r.byCategory.map(function (x) { return x.name; }), r.byCategory.map(function (x) { return x.minutes; }), "Impact minutes"), r.total > 0);
     chart("c-loc", barConfig(r.byLocation.map(function (x) { return x.name; }), r.byLocation.map(function (x) { return x.minutes; }), "Impact minutes"), r.total > 0);
     chart("c-shift", barConfig(r.byShift.map(function (x) { return x.name; }), r.byShift.map(function (x) { return x.count; }), "Exceptions"), r.total > 0);

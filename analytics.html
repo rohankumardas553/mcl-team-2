@@ -76,6 +76,7 @@
     .charts { display: grid; grid-template-columns: 1fr; gap: 14px; }
     .chartbox { position: relative; height: 280px; }
     .chartbox canvas { max-width: 100%; }
+    .chartbox.donut { height: 340px; }
     .nodata, .empty { color: #4b5d80; font-size: 15px; padding: 18px 4px; }
 
     /* Hotspots */
@@ -279,6 +280,13 @@
         <div class="charts">
           <div class="panel"><h3 id="t-created">Exceptions Over Time</h3><div class="chartbox"><canvas id="c-created"></canvas></div></div>
           <div class="panel"><h3 id="t-impact">Recorded Impact Over Time</h3><div class="chartbox"><canvas id="c-impact"></canvas></div></div>
+        </div>
+
+        <h2>What is still unresolved?</h2>
+        <p class="note" id="unresolved-note">Exceptions created in the selected period that are not yet Resolved. Each slice is a category; percentages are its share of the total shown.</p>
+        <div class="charts">
+          <div class="panel"><h3>Unresolved Exceptions by Category</h3><div class="chartbox donut"><canvas id="c-act-count"></canvas></div></div>
+          <div class="panel"><h3>Unresolved Impact Minutes by Category</h3><div class="chartbox donut"><canvas id="c-act-impact"></canvas></div></div>
         </div>
 
         <h2>Where is the operational impact?</h2>

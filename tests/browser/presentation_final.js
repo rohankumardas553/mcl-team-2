@@ -1,0 +1,166 @@
+// Presentation sprint: photo evidence, password recovery / Data Keeper panel, composition donuts.
+// Needs: LOCK=real rebuild + 08 + 10 + fixtures/storage_emu.sql + 12 + 13 on the SCRATCH database; REAL_CHART=/path/chart.umd.js for the donut part.
+process.env.TZ='Asia/Kolkata';
+const {OPLOG,newPage,check,done,psql,asUser}=require('../lib/harness.js');
+const T=(p,ms=400)=>p.waitForTimeout(ms);
+const URL='http://localhost:8765/';
+const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
+const file={name:'evidence.png',mimeType:'image/png',buffer:PNG};
+const noScroll=p=>p.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1);
+const bigPng=async p=>p.evaluate(()=>{ const c=document.createElement('canvas'); c.width=2400;c.height=1800; const g=c.getContext('2d'); g.fillStyle='#456';g.fillRect(0,0,2400,1800); for(let i=0;i<4000;i++){g.fillStyle='hsl('+(i*7%360)+',70%,50%)';g.fillRect((i*37)%2400,(i*91)%1800,30,30);} return c.toDataURL('image/png').split(',')[1]; });
+
+const pages=[]; const np=async(...a)=>{const q=await newPage(...a); pages.push(q); return q;};
+(async()=>{
+ console.log('=== 1. photo evidence: entry form');
+ let p=await np('overman1@example.com',{width:390,height:800}); await p.goto(URL+'index.html'); await T(p,1200);
+ check('photo card visible once migration 12 is present', await p.isVisible('#photo-card'));
+ await p.selectOption('#location','Siding 1');
+ await p.check('input[name=category][value="Coal Despatch"]'); await T(p,200);
+ await p.selectOption('#issue','Weather'); await p.fill('#description','Photo sprint test exception'); await p.fill('#minutes','25'); await p.check('input[name=priority][value=High]');
+ check('"Add photo evidence" button is labelled', /Add photo evidence/.test(await p.textContent('.ph-add')));
+ check('no preview and no note before choosing', !(await p.isVisible('.ph-preview')) && !(await p.isVisible('.ph-note')));
+ await p.setInputFiles('#photo-slot input[type=file]',file); await T(p,600);
+ check('preview shown after choosing', await p.isVisible('.ph-preview img'));
+ check('"Photo note" box and helper shown', await p.isVisible('.ph-note') && /Photo note/.test(await p.textContent('.ph-note')) && /Briefly describe what the photo shows\./.test(await p.textContent('.ph-note')));
+ check('Change and Remove buttons exist', await p.isVisible('text=Change photo') && await p.isVisible('text=Remove photo'));
+ check('no sideways scroll at 390px with the photo preview', await noScroll(p));
+ await p.click('text=Remove photo'); await T(p,200);
+ check('Remove returns to "Add photo evidence" with no preview', !(await p.isVisible('.ph-preview')) && await p.isVisible('.ph-add'));
+ await p.setInputFiles('#photo-slot input[type=file]',{name:'notes.txt',mimeType:'text/plain',buffer:Buffer.from('hello')}); await T(p,300);
+ check('non-image refused with a friendly message', /JPEG, PNG or WebP/.test(await p.textContent('.ph-err')) && !(await p.isVisible('.ph-preview')));
+ await p.setInputFiles('#photo-slot input[type=file]',file); await T(p,600);
+ await p.fill('.ph-note input','Slippery patch near the weighbridge');
+ await p.click('#save'); await T(p,2500);
+ const msgT=await p.textContent('#msg');
+ check('save message mentions photo evidence added', /Exception recorded successfully\. Photo evidence added\./.test(msgT), msgT);
+ const up=OPLOG.filter(o=>o.kind==='upload');
+ check('one upload, JPEG, safe path, small', up.length===1 && up[0].type==='image/jpeg' && /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/.test(up[0].path) && up[0].size<5242880, JSON.stringify(up));
+ check('rpc attach_exception_photo called with the report event and caption', OPLOG.some(o=>o.kind==='rpc'&&o.name==='attach_exception_photo'&&o.args.p_event==='report'&&o.args.p_caption==='Slippery patch near the weighbridge'));
+ const row=psql(`select event||'|'||visibility||'|'||added_by_role||'|'||caption from exception_photos`).out;
+ check('database row: report / operational / overman / caption', row==='report|operational|overman|Slippery patch near the weighbridge', row);
+ check('form cleared after save (photo gone)', !(await p.isVisible('.ph-preview')));
+ check('no base64 or public URL stored: path only', psql(`select count(*) from exception_photos where path !~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.jpg$'`).out==='0');
+
+ // large photo is shrunk
+ const big=await bigPng(p);
+ await p.setInputFiles('#photo-slot input[type=file]',{name:'big.png',mimeType:'image/png',buffer:Buffer.from(big,'base64')}); await T(p,1200);
+ const dims=await p.evaluate(()=>{const i=document.querySelector('.ph-preview img'); return [i.naturalWidth,i.naturalHeight];});
+ check('large photo shrunk to at most 1600 px', dims[0]===1600 && dims[1]===1200, JSON.stringify(dims));
+ await p.close();
+
+ console.log('=== 2. photo evidence: dashboard display and lightbox');
+ const id=psql(`select exception_id from exception_photos limit 1`).out;
+ p=await np('overman1@example.com',{width:390,height:800}); await p.goto(URL+'dashboard.html'); await T(p,1500);
+ const card=`#list .item[data-id="${id}"]`;
+ check('card shows a "Photo evidence (1)" indicator', /Photo evidence \(1\)/.test(await p.textContent(card+' details.sec:has-text("Photo evidence") summary')));
+ await p.click(card+' summary:has-text("Photo evidence")'); await T(p,800);
+ check('thumbnail loaded from a signed link', await p.isVisible(card+' .ph-thumb img'));
+ const meta=await p.textContent(card+' .ph-meta');
+ check('shows event, who added it, when and the note', /Report/.test(meta) && /Overman/i.test(meta) && /Photo note: Slippery patch/.test(meta) && /\d{2}:\d{2}/.test(meta), meta);
+ await p.click(card+' .ph-thumb'); await T(p,500);
+ check('click opens the larger view with caption', await p.isVisible('#ph-lightbox img') && /Report photo/.test(await p.textContent('#ph-lightbox .ph-cap')));
+ check('lightbox fits 390px (no sideways scroll)', await noScroll(p));
+ await p.keyboard.press('Escape'); await T(p,200);
+ check('Escape closes the larger view', !(await p.isVisible('#ph-lightbox')));
+ check('sign calls were made by the signed-in person only', OPLOG.filter(o=>o.kind==='sign').every(o=>o.user==='overman1@example.com'));
+ await p.close();
+
+ console.log('=== 3. remark / closure / reopen photos and who sees what');
+ asUser('overman2@example.com',`select start_exception('${id}')`);
+ asUser('overman1@example.com',`select request_closure('${id}','Cleared and checked on site')`);
+ asUser('sic1@example.com',`select resolve_exception('${id}')`);
+ p=await np('manager1@example.com',{width:390,height:900}); await p.goto(URL+'dashboard.html'); await T(p,1500);
+ await p.selectOption('#f-day','all').catch(()=>{}); await T(p,500);
+ let c=`#list .item[data-id="${id}"]`;
+ await p.click(c+' .act:has-text("Reopen")'); await T(p,300);
+ check('Reopen form offers photo evidence', await p.isVisible(c+' .formbox .ph-add'));
+ await p.fill(c+' .formbox textarea','Found wrong at inspection'); await p.setInputFiles(c+' .formbox input[type=file]',file); await T(p,600);
+ await p.fill(c+' .formbox .ph-note input','Inspection finding'); 
+ check('form with photo preview fits 390px', await noScroll(p));
+ await p.click(c+' .formbox .go'); await T(p,2500);
+ check('reopen photo stored as event reopen / management', psql(`select event||'|'||visibility from exception_photos where caption='Inspection finding'`).out==='reopen|management');
+ await p.close();
+ p=await np('overman1@example.com'); await p.goto(URL+'dashboard.html'); await T(p,1500);
+ check('overman sees only the 1 operational photo (not the management one)', /Photo evidence \(1\)/.test(await p.textContent(`#list .item[data-id="${id}"]`)));
+ await p.close();
+ p=await np('sic1@example.com'); await p.goto(URL+'dashboard.html'); await T(p,1500);
+ check('shift in-charge sees both photos', /Photo evidence \(2\)/.test(await p.textContent(`#list .item[data-id="${id}"]`)));
+ // remark photo + upload failure keeps the remark
+ c=`#list .item[data-id="${id}"]`;
+ global.FAIL_UPLOAD=true;
+ await p.click(c+' .act:has-text("operational remark")'); await T(p,300);
+ await p.fill(c+' .formbox textarea','Remark with a photo that fails'); await p.setInputFiles(c+' .formbox input[type=file]',file); await T(p,600);
+ await p.click(c+' .formbox .go'); await T(p,2000);
+ check('remark saved even though the photo failed', psql(`select count(*) from exception_remarks where body='Remark with a photo that fails'`).out==='1');
+ const toast=await p.textContent('#toast');
+ check('toast says the photo could not be added, with the error', /Remark added\. But the photo could not be added\. Error: simulated upload failure/.test(toast), toast);
+ global.FAIL_UPLOAD=false;
+ await p.click(c+' .act:has-text("operational remark")'); await T(p,300);
+ await p.fill(c+' .formbox textarea','Remark with a working photo'); await p.setInputFiles(c+' .formbox input[type=file]',file); await T(p,600);
+ await p.click(c+' .formbox .go'); await T(p,2500);
+ check('remark photo stored as event remark / operational', psql(`select event||'|'||visibility from exception_photos where event='remark'`).out==='remark|operational');
+ check('History shows "Photo added" (shift in-charge)', await (async()=>{ await p.click(c+' summary:has-text("History")'); await T(p,800); return /Photo added/.test(await p.textContent(c)); })());
+ await p.close();
+ // photos field absent for roles/forms without it
+ p=await np('sic1@example.com'); await p.goto(URL+'dashboard.html'); await T(p,1500);
+ const other=await psql(`select id from shift_exceptions where status='Open' limit 1`).out;
+ await p.close();
+
+ console.log('=== 4. password recovery (login page)');
+ p=await np(null,{width:390,height:800}); await p.goto(URL+'login.html'); await T(p,500);
+ check('"Forgot password?" link visible on the login card', await p.isVisible('#forgot-open'));
+ check('prominent disclaimer still above Email', await p.evaluate(()=>{const n=document.getElementById('proto-note').getBoundingClientRect(),e=document.getElementById('email').getBoundingClientRect(); return n.bottom<=e.top && /not an official MCL system/.test(document.getElementById('proto-note').textContent);}));
+ await p.fill('#email','overman1@example.com'); await p.click('#forgot-open'); await T(p,200);
+ check('forgot card opens with e-mail pre-filled and disclaimer', await p.isVisible('#forgot-card') && !(await p.isVisible('#signin-card')) && (await p.inputValue('#forgot-email'))==='overman1@example.com' && /not an official MCL system/.test(await p.textContent('#forgot-card')));
+ await p.click('#forgot-send'); await T(p,400);
+ const rs=await p.evaluate(()=>window.__resets);
+ check('reset requested through Supabase with redirect back to login.html', rs && rs.length===1 && rs[0].email==='overman1@example.com' && /\/login\.html$/.test(rs[0].redirectTo), JSON.stringify(rs));
+ check('neutral message (does not reveal whether an account exists)', /If that e-mail belongs to an account/.test(await p.textContent('#msg')));
+ await p.click('#forgot-send'); await T(p,300);
+ check('second request within 60 s is held back', /Please wait/.test(await p.textContent('#msg')) && (await p.evaluate(()=>window.__resets.length))===1);
+ check('no sideways scroll on the forgot card', await noScroll(p));
+ await p.close();
+ p=await np('overman1@example.com'); await p.goto(URL+'login.html#access_token=abc&refresh_token=def&type=recovery'); await T(p,700);
+ check('recovery link: only the new-password card shows (no "Signed in")', await p.isVisible('#recover-card') && !(await p.isVisible('#me-card')) && !(await p.isVisible('#signin-card')));
+ await p.fill('#new-password','short'); await p.fill('#new-password2','short'); await p.click('#recover-save'); await T(p,200);
+ check('short password refused by the page', /at least 8/.test(await p.textContent('#msg')) || await p.evaluate(()=>!document.getElementById('new-password').checkValidity()));
+ await p.fill('#new-password','Fictional-Pass-123'); await p.fill('#new-password2','Different-Pass-123'); await p.click('#recover-save'); await T(p,300);
+ check('mismatch refused', /not the same/.test(await p.textContent('#msg')) && (await p.evaluate(()=>(window.__updates||[]).length))===0);
+ await p.fill('#new-password2','Fictional-Pass-123'); await p.click('#recover-save'); await T(p,600);
+ check('password changed once, then signed out and asked to sign in again', (await p.evaluate(()=>window.__updates.length))===1 && await p.isVisible('#signin-card') && /Your password has been changed/.test(await p.textContent('#msg')));
+ check('password fields are emptied and nothing is logged', (await p.inputValue('#new-password'))==='' && !p.errs.length);
+ await p.close();
+ p=await np(null); await p.goto(URL+'login.html#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired'); await T(p,600);
+ check('expired link: friendly message with the real error text', /expired or was already used/.test(await p.textContent('#msg')) && /Email link is invalid or has expired/.test(await p.textContent('#msg')) && await p.isVisible('#signin-card'));
+ await p.close();
+
+ console.log('=== 5. Data Keeper panel');
+ psql(`update profiles set can_administer=true where user_id=(select id from auth.users where email='gm1@example.com')`);
+ p=await np('po1@example.com'); await p.goto(URL+'dashboard.html'); await T(p,1500);
+ check('ordinary user sees NO account administration', !(await p.$('#admin-panel')));
+ await p.close();
+ p=await np('gm1@example.com',{width:390,height:900}); await p.goto(URL+'dashboard.html'); await T(p,1500);
+ check('administrator sees the panel (collapsed)', !!(await p.$('#admin-panel')) && !(await p.getAttribute('#admin-panel','open')===''));
+ await p.click('#admin-panel > summary'); await T(p,1000);
+ const rows=await p.$$eval('#admin-panel .ad-row',r=>r.map(x=>x.innerText));
+ check('lists accounts with role, e-mail and last sign-in', rows.length>=8 && rows.some(t=>/overman1@example\.com/.test(t) && /Last sign-in/.test(t)));
+ check('no password anywhere in the list', !rows.some(t=>/password:/i.test(t)));
+ check('no sideways scroll at 390px', await noScroll(p));
+ const r1=await p.$$('#admin-panel .ad-row');
+ let target=null; for(const r of r1){ if(/overman1@example\.com/.test(await r.innerText())) target=r; }
+ await (await target.$('button:has-text("Send password reset")')).click(); await T(p,800);
+ const rs2=await p.evaluate(()=>window.__resets);
+ check('Send password reset asks Supabase to e-mail that account', rs2 && rs2.length===1 && rs2[0].email==='overman1@example.com', JSON.stringify(rs2));
+ check('action logged by the database', psql(`select action||'|'||target_name from account_admin_log order by created_at desc limit 1`).out.startsWith('recovery_requested|'));
+ check('no one could set a password (no updateUser call)', !(await p.evaluate(()=>window.__updates)));
+ check('own account has no Switch off button', await (async()=>{ for(const r of await p.$$('#admin-panel .ad-row')){ const t=await r.innerText(); if(/Data Keeper/.test(t)) return !(await r.$('button:has-text("Switch off")')); } return false; })());
+ p.on('dialog',d=>d.accept());
+ let t2=null; for(const r of await p.$$('#admin-panel .ad-row')){ if(/overman2@example\.com/.test(await r.innerText())) t2=r; }
+ await (await t2.$('button:has-text("Switch off")')).click(); await T(p,1200);
+ check('switch off works and shows Switched off', psql(`select active from profiles where user_id=(select id from auth.users where email='overman2@example.com')`).out==='f' && /Switched off/.test(await p.textContent('#admin-panel')));
+ psql(`update profiles set active=true where user_id=(select id from auth.users where email='overman2@example.com')`);
+ await p.close();
+
+ check('no page errors anywhere', pages.every(q=>!q.errs.length), JSON.stringify(pages.map(q=>q.errs)));
+ await done();
+})();

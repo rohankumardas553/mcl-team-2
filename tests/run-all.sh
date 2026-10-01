@@ -39,4 +39,9 @@ section "demo data cleanup (11) and its rollback"
 bash database/demo_cleanup.sh 2>&1 | grep -E "FAIL|PASS="
 section "new product features: draft, handover end-to-end, five-role walkthrough, weak network, 390 px"
 fresh; run node browser/draft.js; fresh; run node browser/handover_e2e.js; fresh; run node browser/role_walkthrough.js
+section "presentation sprint: photo evidence (12), account administration (13), password recovery, donuts"
+fresh; $P -f $FIX/storage_emu.sql >/dev/null 2>&1; $P -f $R/12-photo-evidence.sql >/dev/null 2>&1; $P -f $R/13-account-admin.sql >/dev/null 2>&1
+(bash permissions/perm_part8.sh 2>&1 | grep -E "FAIL|END PASS=")
+run node browser/presentation_final.js
+if [ -n "$REAL_CHART" ]; then run node browser/donut_charts.js; else echo "donut_charts.js skipped (set REAL_CHART=/path/to/chart.umd.js)"; fi
 echo; echo "DONE (any line starting with FAIL needs attention)"; exit $TOTAL_FAIL

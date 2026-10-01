@@ -296,6 +296,8 @@
   <script src="config.js"></script>
   <script src="auth.js"></script>
   <script src="shiftclock.js"></script>
+  <script src="photos.js"></script>
+  <script src="accountadmin.js"></script>
   <script>
     var msg = document.getElementById("msg");
     function fail(text) { msg.className = "err"; msg.textContent = text; }
@@ -321,7 +323,7 @@
       "resolved_by_name,resolved_at";
 
     var access = null, myId = null;
-    var allRows = [], remarksBy = {}, chart = null, view = "active", reopenedRecent = [];
+    var allRows = [], remarksBy = {}, photosBy = null, chart = null, view = "active", reopenedRecent = [];
     var CATS = ["Coal Despatch", "Dust Suppression", "Haul Road", "Coal Quality"];
 
     function can(action) { return MineShift.can(action, access); }
@@ -378,6 +380,8 @@
           });
         } catch (e) { reopenedRecent = []; }
       }
+      // Photo evidence (database/12). If it is not set up yet, photosBy stays null and the pages simply hide the feature.
+      photosBy = await MinePhotos.loadAll();
       remarksBy = {};
       rm.forEach(function (m) {
         // Overmen never see management remarks (the database also hides them).
@@ -714,7 +718,7 @@
     }
 
     // Runs a database function, then reloads everything. Returns true on success.
-    async function doRpc(item, btn, fn, args, okText) {
+    async function doRpc(item, btn, fn, args, okText, afterOk) {
       var label = btn.textContent;
       var old = item.querySelector(".inline-err");
       if (old) old.remove();
@@ -724,10 +728,13 @@
       try {
         var res = await MineShift.db.rpc(fn, args);
         if (res.error) throw new Error(res.error.message);
+        // The change is saved. An optional photo is uploaded now; if only the photo fails, say so plainly.
+        var photoProblem = afterOk ? await afterOk() : null;
         if (window.__clearPendingRefresh) window.__clearPendingRefresh();
         await loadAll();
         renderView();
-        toast("ok", okText);
+        if (photoProblem) toast("err", okText + " But the photo could not be added. Error: " + photoProblem);
+        else toast("ok", okText);
         return true;
       } catch (e) {
         var text = errorText(e);
@@ -761,6 +768,11 @@
         box.appendChild(l2);
         box.appendChild(el("div", "hint", "At least " + cfg.text.min + " characters."));
       }
+      var photo = null;
+      if (cfg.photo && photosBy !== null) {
+        photo = MinePhotos.field();
+        box.appendChild(photo.node);
+      }
       var errBox = el("div", "");
       box.appendChild(errBox);
       var row = el("div", "buttons");
@@ -782,7 +794,9 @@
         }
         errBox.className = "";
         var args = cfg.args(body, sel ? sel.value : null);
-        var ok = await doRpc(item, go, cfg.fn, args, cfg.ok);
+        var pv = photo ? photo.value() : null;
+        var after = pv ? function () { return MinePhotos.upload(cfg.photo.id, cfg.photo.event, pv); } : null;
+        var ok = await doRpc(item, go, cfg.fn, args, cfg.ok, after);
         if (!ok) { /* the error is shown on the card; keep the form open */ }
       });
       var actions = item.querySelector(".actions");
@@ -843,7 +857,7 @@
       closure_declined: "Closure declined", resolved: "Resolved", reopened: "Reopened",
       priority_changed: "Priority changed", remark_operational: "Operational remark",
       remark_management: "Management remark", legacy_imported: "Existing record imported",
-      location_renamed: "Location renamed", direct_change: "Changed directly"
+      location_renamed: "Location renamed", direct_change: "Changed directly", photo_added: "Photo added"
     };
 
     function historyBlock(r) {
@@ -904,7 +918,7 @@
       }
       if (r.status === "In progress" && !pending && can("request_closure")) {
         add("Request closure", "", function () {
-          openForm(item, { title: "Request closure", fn: "request_closure", ok: "Closure requested.", submit: "Send request",
+          openForm(item, { photo: { event: "closure", id: r.id }, title: "Request closure", fn: "request_closure", ok: "Closure requested.", submit: "Send request",
             text: { label: "Closure note (what was done or verified)", min: 5 },
             args: function (body) { return { p_id: r.id, p_note: body }; } });
         });
@@ -926,7 +940,7 @@
           });
         } else {
           add("Resolve", "", function () {
-            openForm(item, { title: "Resolve (no closure request exists)", fn: "resolve_exception", ok: "Resolved.", submit: "Resolve",
+            openForm(item, { photo: { event: "closure", id: r.id }, title: "Resolve (no closure request exists)", fn: "resolve_exception", ok: "Resolved.", submit: "Resolve",
               text: { label: "Resolution note", min: 5 },
               args: function (body) { return { p_id: r.id, p_note: body }; } });
           });
@@ -934,7 +948,7 @@
       }
       if (r.status === "Resolved" && can("reopen")) {
         add("Reopen", "secondary", function () {
-          openForm(item, { title: "Reopen this exception", fn: "reopen_exception", ok: "Reopened.", submit: "Reopen",
+          openForm(item, { photo: { event: "reopen", id: r.id }, title: "Reopen this exception", fn: "reopen_exception", ok: "Reopened.", submit: "Reopen",
             text: { label: "Reason for reopening", min: 5 },
             args: function (body) { return { p_id: r.id, p_reason: body }; } });
         });
@@ -957,7 +971,7 @@
       var overmanBlocked = access.role === "overman" && r.status === "Resolved";
       if (kind && !overmanBlocked) {
         add(kind === "operational" ? "Add operational remark" : "Add management remark", "secondary", function () {
-          openForm(item, { title: kind === "operational" ? "Operational remark" : "Management remark", fn: "add_remark", ok: "Remark added.", submit: "Add remark",
+          openForm(item, { photo: { event: "remark", id: r.id }, title: kind === "operational" ? "Operational remark" : "Management remark", fn: "add_remark", ok: "Remark added.", submit: "Add remark",
             text: { label: "Remark", min: 3, max: 1000 },
             args: function (body) { return { p_id: r.id, p_kind: kind, p_body: body }; } });
         });
@@ -997,6 +1011,8 @@
         item.appendChild(el("div", "line", "Resolved by " + (r.resolved_by_name || "unknown") + " · " + fmtTime(r.resolved_at)));
       }
       item.appendChild(remarksBlock(r));
+      var ph = photosBy ? MinePhotos.block(photosBy[r.id], { roleLabel: roleLabel, fmtTime: fmtTime }) : null;
+      if (ph) item.appendChild(ph);
       item.appendChild(actionButtons(item, r));
       if (can("view_all_history")) item.appendChild(historyBlock(r));
       return item;
@@ -1112,6 +1128,10 @@
         renderClock();
         updateShiftOptions();                                        // choices follow the new shift at once
         refreshWhenIdle();
+      });
+      // Data Keeper only: the Account administration panel (the database decides; everybody else sees nothing).
+      MineAccounts.isAdmin().then(function (yes) {
+        if (yes) MineAccounts.mount(document.querySelector("main"), myId);
       });
       try {
         await loadAll();

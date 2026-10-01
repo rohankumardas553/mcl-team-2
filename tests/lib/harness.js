@@ -23,7 +23,7 @@ function cleanErr(err){ const m=err.match(/ERROR:\s+([^\n]*)/); return m?m[1].tr
 async function dbCall(op){
   const email=op.user; if(!email) return {data:null,error:{message:'JWT: not signed in'}};
   if(op.kind==='select'){
-    const st=op.st; if(!['shift_exceptions','exception_remarks','exception_audit','profiles'].includes(st.table)) return {data:null,error:{message:'bad table'}};
+    const st=op.st; if(!['shift_exceptions','exception_remarks','exception_audit','profiles','exception_photos'].includes(st.table)) return {data:null,error:{message:'bad table'}};
     if(!/^[a-z_,]+$/.test(st.cols)) return {data:null,error:{message:'bad cols'}};
     OPLOG.push({user:op.user,kind:'select',table:st.table,filters:st.filters.map(f=>f[0]+':'+f[1]),range:st.range||null});
     if(global.DELAY_MS) await new Promise(r=>setTimeout(r,global.DELAY_MS));
@@ -37,6 +37,21 @@ async function dbCall(op){
     const r=asUser(email,sql);
     if(r.err && /ERROR/.test(r.err)) return {data:null,error:{message:cleanErr(r.err)}};
     const lines=r.out.split('\n'); return {data:JSON.parse(lines[lines.length-1]),error:null};
+  }
+  if(op.kind==='upload'){ // stand-in for Supabase Storage upload (the real storage rules are the scratch database policies)
+    const uid=UIDS[email.split('@')[0]];
+    if(global.FAIL_UPLOAD) return {data:null,error:{message:'simulated upload failure'}};
+    const r=asUser(email,`insert into storage.objects(bucket_id,name,owner_id,metadata) values (${lit(op.bucket)},${lit(op.path)},'${uid}',jsonb_build_object('mimetype',${lit(op.type)},'size',${op.size}))`);
+    if(r.err && /ERROR/.test(r.err)) return {data:null,error:{message:cleanErr(r.err)}};
+    OPLOG.push({user:op.user,kind:'upload',path:op.path,type:op.type,size:op.size});
+    return {data:{path:op.path},error:null};
+  }
+  if(op.kind==='sign'){
+    const r=asUser(email,`select count(*) from storage.objects where bucket_id=${lit(op.bucket)} and name=${lit(op.path)}`);
+    const n=parseInt(r.out.split('\n').pop()||'0',10);
+    if(!n) return {data:null,error:{message:'Object not found'}};
+    OPLOG.push({user:op.user,kind:'sign',path:op.path});
+    return {data:{signedUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='},error:null};
   }
   if(op.kind==='rpc'){
     OPLOG.push({user:op.user,kind:'rpc',name:op.name,args:op.args});
@@ -57,6 +72,10 @@ async function dbCall(op){
     if(r.err && /ERROR/.test(r.err)) return {data:null,error:{message:cleanErr(r.err)}};
     const lines=r.out.split('\n').filter(x=>x); const last=lines[lines.length-1]||'';
     let data=null; if(last.startsWith('{')) { try{data=JSON.parse(last)}catch(e){} }
+    else if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(last)) data=last;
+    else if(op.name==='my_admin') data=(last==='t');
+    else if(op.name==='admin_log_recovery') data=last;
+    else if(op.name==='admin_list_accounts'){ const r2=asUser(email,`select coalesce(jsonb_agg(t),'[]'::jsonb)::text from public.admin_list_accounts() t`); data=JSON.parse(r2.out.split('\n').filter(x=>x).pop()); }
     return {data,error:null};
   }
 }
@@ -72,7 +91,12 @@ window.supabase={createClient:function(){
    getSession:function(){var c=localStorage.getItem('SESS');return Promise.resolve({data:{session:c?{user:{email:c,id:window.__uids[c.split('@')[0]]}}:null},error:null})},
    signInWithPassword:function(o){var l=o.email.split('@')[0];if(!window.__uids[l]||o.password!=='pw-'+l)return Promise.resolve({data:{},error:{message:'Invalid login credentials'}});localStorage.setItem('SESS',o.email);return Promise.resolve({data:{session:{user:{email:o.email,id:window.__uids[l]}}},error:null})},
    signOut:function(){localStorage.removeItem('SESS');return Promise.resolve({error:null})},
-   onAuthStateChange:function(){}}};}};`;
+   resetPasswordForEmail:function(e,o){(window.__resets=window.__resets||[]).push({email:e,redirectTo:o&&o.redirectTo});return Promise.resolve({data:{},error:window.__resetErr?{message:window.__resetErr}:null})},
+   updateUser:function(o){(window.__updates=window.__updates||[]).push({hasPassword:!!(o&&o.password)});return Promise.resolve({data:{},error:window.__updateErr?{message:window.__updateErr}:null})},
+   onAuthStateChange:function(cb){(window.__authCbs=window.__authCbs||[]).push(cb);}},
+  storage:{from:function(b){return {
+    upload:function(path,blob,opts){return window.__db({kind:'upload',bucket:b,path:path,type:(opts&&opts.contentType)||blob.type,size:blob.size,user:localStorage.getItem('SESS')})},
+    createSignedUrl:function(path){return window.__db({kind:'sign',bucket:b,path:path,user:localStorage.getItem('SESS')})}};}}};}};`;
 const FAKE_CH=`window.Chart=function(c,cfg){window.__chart=cfg;(window.__charts=window.__charts||{})[c.id]=cfg;this.data=cfg.data;this.update=function(){};this.destroy=function(){};};`;
 const srv=http.createServer((q,r)=>{const u=q.url.split('?')[0];const f=path.join(ROOT,u==='/'?'index.html':u);
  fs.readFile(f,(e,d)=>{if(e){r.writeHead(404);r.end();}else{r.writeHead(200,{'content-type':f.endsWith('.html')?'text/html':'text/javascript'});r.end(d);}});}).listen(8765);
