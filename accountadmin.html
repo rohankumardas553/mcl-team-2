@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MineShift Command - Account administration</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { --navy: #0b2a5b; --navy-dark: #071c40; --ink: #0b1f44; --line: #c7d2e5; --bg: #eef2f8; }
+    body { margin: 0; font-family: "Segoe UI", Roboto, Arial, Helvetica, sans-serif; background: var(--bg);
+           color: var(--ink); font-size: 18px; line-height: 1.4; }
+    [hidden] { display: none !important; }
+
+    /* Shared header (same on every page) */
+    header { background: var(--navy-dark); color: #fff; border-bottom: 4px solid #f59e0b; }
+    .bar { max-width: 1240px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap;
+           align-items: center; justify-content: space-between; gap: 8px 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: .3px; }
+    .mark { width: 38px; height: 38px; border-radius: 9px; background: #fff; color: var(--navy);
+            display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
+    .right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+    nav { display: flex; flex-wrap: wrap; gap: 6px; }
+    nav a { color: #fff; text-decoration: none; font-weight: 600; font-size: 16px; padding: 10px 16px;
+            min-height: 44px; display: inline-flex; align-items: center; border-radius: 10px; }
+    nav a:hover { background: rgba(255,255,255,.14); }
+    nav a.active { background: #fff; color: var(--navy); }
+    .who { display: flex; align-items: center; gap: 12px; }
+    .who-text { display: flex; flex-direction: column; line-height: 1.2; text-align: right; }
+    .who-name { font-weight: 700; font-size: 15px; }
+    .who-role { font-size: 13px; color: #c7d2e5; }
+    .who-out { min-height: 44px; padding: 0 16px; font: inherit; font-size: 15px; font-weight: 700; color: #fff;
+               background: transparent; border: 2px solid rgba(255,255,255,.6); border-radius: 10px; cursor: pointer; }
+    .who-out:hover { background: rgba(255,255,255,.14); }
+    .who-out:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+
+    main { max-width: 900px; margin: 0 auto; padding: 20px 16px 8px; }
+    .title h1 { font-size: 28px; margin: 4px 0 4px; }
+    .title p { margin: 0 0 16px; color: #33466b; font-size: 16px; }
+    h3 { font-size: 16px; margin: 0 0 8px; }
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+             box-shadow: 0 2px 8px rgba(11, 42, 91, .08); }
+    .proto-note { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: #fff7ed; border: 2px solid #f59e0b; color: #7c2d12; font-size: 16px; font-weight: 700; }
+    #msg { margin-bottom: 16px; padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; }
+    #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
+    footer { text-align: center; padding: 20px 16px 28px; font-size: 14px; color: var(--navy); }
+    @media (max-width: 480px) { .who-text { text-align: left; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand"><span class="mark">MS</span>MineShift Command</div>
+      <div class="right">
+        <nav id="nav"></nav>
+        <div class="who" id="who"></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="title">
+      <h1>Account administration</h1>
+      <p>For the Data Keeper. Send a password reset e-mail, or switch an account on or off. Nobody chooses or sees another person&rsquo;s password.</p>
+    </div>
+    <p class="proto-note">Training prototype &mdash; not an official MCL system. All data is fictional.</p>
+    <div id="msg" role="status"></div>
+
+    <section class="panel" id="denied" hidden>
+      <h3>Not authorised</h3>
+      <p>Account administration is only for the Data Keeper. Your account cannot see this page.</p>
+      <a href="dashboard.html">Go to the Dashboard &rarr;</a>
+    </section>
+
+    <div id="admin-host"></div>
+  </main>
+  <footer>Training prototype &ndash; all data is made up</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="accountadmin.js"></script>
+  <script>
+    (async function () {
+      var ctx = await MineShift.start("accountadmin");     // needs a signed-in person with an active role; otherwise login.html
+      if (!ctx) return;
+      // The database decides who is an administrator (my_admin()). Nobody else gets the list or any button.
+      var yes = await MineAccounts.isAdmin();
+      if (!yes) { document.getElementById("denied").hidden = false; return; }
+      MineAccounts.navLink("accountadmin");
+      MineAccounts.mount(document.getElementById("admin-host"), ctx.session.user.id, { open: true });
+    })();
+  </script>
+</body>
+</html>

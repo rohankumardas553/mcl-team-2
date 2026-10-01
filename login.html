@@ -65,6 +65,9 @@
     .note { font-size: 15px; color: #33466b; margin: 12px 0 0; }
 
     .proto-note { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: #fff7ed; border: 2px solid #f59e0b; color: #7c2d12; font-size: 16px; font-weight: 700; }
+    .linkbtn { display: block; width: 100%; margin-top: 12px; min-height: 48px; padding: 10px; font: inherit; font-size: 16px; font-weight: 700;
+               color: var(--navy); background: transparent; border: 0; text-decoration: underline; cursor: pointer; text-align: center; }
+    .linkbtn:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
     #msg { margin-bottom: 16px; padding: 14px; border-radius: 12px; display: none; word-wrap: break-word; }
     #msg.err { display: block; background: #fee2e2; color: #7f1d1d; border: 2px solid #dc2626; }
     #msg.ok { display: block; background: #dcfce7; color: #14532d; border: 2px solid #16a34a; font-weight: 700; }
@@ -104,6 +107,38 @@
           <input id="password" name="password" type="password" autocomplete="current-password" required>
         </div>
         <button type="submit" class="big" id="signin">Sign in</button>
+      </form>
+      <button type="button" class="linkbtn" id="forgot-open">Forgot password?</button>
+    </section>
+
+    <section class="card" id="forgot-card" hidden>
+      <h2>Forgot password?</h2>
+      <p class="proto-note">Training prototype &mdash; not an official MCL system. All data is fictional.</p>
+      <p class="note">Enter your account e-mail. If it belongs to an account, Supabase sends a reset link to that address. The link can be used once and then stops working.</p>
+      <form id="forgot-form">
+        <div class="field">
+          <label class="label" for="forgot-email">Email</label>
+          <input id="forgot-email" type="email" autocomplete="username" required inputmode="email">
+        </div>
+        <button type="submit" class="big" id="forgot-send">Send password reset link</button>
+      </form>
+      <button type="button" class="linkbtn" id="forgot-back">Back to sign in</button>
+    </section>
+
+    <section class="card" id="recover-card" hidden>
+      <h2>Choose a new password</h2>
+      <p class="proto-note">Training prototype &mdash; not an official MCL system. All data is fictional.</p>
+      <p class="note">Use at least 8 characters. Your password is never shown to anyone, including the Data Keeper.</p>
+      <form id="recover-form">
+        <div class="field">
+          <label class="label" for="new-password">New password</label>
+          <input id="new-password" type="password" autocomplete="new-password" required minlength="8">
+        </div>
+        <div class="field">
+          <label class="label" for="new-password2">Type it again</label>
+          <input id="new-password2" type="password" autocomplete="new-password" required minlength="8">
+        </div>
+        <button type="submit" class="big" id="recover-save">Save new password</button>
       </form>
     </section>
 
@@ -162,6 +197,8 @@
       $("me-role").textContent = "";
       $("perms").textContent = "";
       $("signin-card").hidden = false;
+      $("forgot-card").hidden = true;
+      $("recover-card").hidden = true;
       $("me-card").hidden = true;
       $("perms-card").hidden = true;
     }
@@ -234,6 +271,69 @@
       signinBtn.disabled = false;
     });
 
+    // ---- Forgot password / password recovery
+    var recoveryMode = /[#&]type=recovery\b/.test(window.location.hash);
+    var hashError = (function () {
+      var m = /[#&]error_description=([^&]*)/.exec(window.location.hash);
+      if (!m) return "";
+      try { return decodeURIComponent(m[1].replace(/\+/g, " ")); } catch (e) { return m[1]; }
+    })();
+    function showOnly(card) {
+      ["signin-card", "forgot-card", "recover-card"].forEach(function (id) { $(id).hidden = id !== card; });
+    }
+    function clearHash() { try { history.replaceState(null, "", window.location.pathname); } catch (e) {} }
+
+    $("forgot-open").addEventListener("click", function () {
+      $("forgot-email").value = $("email").value.trim();
+      show("", "");
+      showOnly("forgot-card");
+      $("forgot-email").focus();
+    });
+    $("forgot-back").addEventListener("click", function () { show("", ""); showOnly("signin-card"); });
+
+    var lastReset = 0;
+    $("forgot-form").addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      if (!MineShift.ready) { show("err", "The database is not connected. Error: " + MineShift.error); return; }
+      var wait = 60000 - (Date.now() - lastReset);
+      if (wait > 0) { show("info", "Please wait " + Math.ceil(wait / 1000) + " seconds before asking for another link."); return; }
+      var btn = $("forgot-send");
+      btn.disabled = true;
+      show("", "");
+      try {
+        await MineShift.requestPasswordReset($("forgot-email").value.trim());
+        lastReset = Date.now();
+        // The same words whether or not the address has an account, so nobody can use this to find out who has one.
+        show("ok", "If that e-mail belongs to an account, a password reset link is on its way. Please check the inbox (and the spam folder). The link works once.");
+      } catch (e) {
+        show("err", "Sorry, the reset e-mail could not be requested. Error: " + e.message);
+      }
+      btn.disabled = false;
+    });
+
+    $("recover-form").addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      var p1 = $("new-password").value, p2 = $("new-password2").value;
+      if (p1.length < 8) { show("err", "Please use at least 8 characters."); return; }
+      if (p1 !== p2) { show("err", "The two passwords are not the same. Please type them again."); return; }
+      var btn = $("recover-save");
+      btn.disabled = true;
+      show("", "");
+      try {
+        var session = await MineShift.getSession();
+        if (!session) throw new Error("This reset link has expired or was already used. Please request a new one.");
+        await MineShift.setNewPassword(p1);
+        $("new-password").value = ""; $("new-password2").value = "";
+        await MineShift.signOut();
+        clearHash();
+        showOnly("signin-card");
+        show("ok", "Your password has been changed. Please sign in with the new password.");
+      } catch (e) {
+        show("err", "Sorry, the password could not be changed. Error: " + e.message);
+      }
+      btn.disabled = false;
+    });
+
     $("signout").addEventListener("click", async function () {
       try {
         await MineShift.signOut();
@@ -249,6 +349,20 @@
         show("err", "The database is not connected. Please tell the team. Error: " + MineShift.error);
         signinBtn.disabled = true;
         return;
+      }
+      if (MineShift.db.auth.onAuthStateChange) {
+        MineShift.db.auth.onAuthStateChange(function (event) {
+          if (event === "PASSWORD_RECOVERY") { showOnly("recover-card"); show("info", "Choose a new password for your account."); }
+        });
+      }
+      if (recoveryMode) {                       // the person came from the reset e-mail: do not treat the temporary session as a sign-in
+        showOnly("recover-card");
+        show("info", "Choose a new password for your account.");
+        return;
+      }
+      if (hashError) {
+        show("err", "This password reset link has expired or was already used. Please use \"Forgot password?\" to get a new one. (" + hashError + ")");
+        clearHash();
       }
       try {
         await refresh();

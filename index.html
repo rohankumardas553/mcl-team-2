@@ -208,6 +208,11 @@
         </div>
       </section>
 
+      <section class="card" id="photo-card" hidden>
+        <h2>Photo evidence <span class="hint">(optional)</span></h2>
+        <div id="photo-slot"></div>
+      </section>
+
       <button type="submit" id="save">Add Exception</button>
       <p class="sb-note" id="draft-note" hidden></p>
       <button type="button" id="clear-draft" class="clear" hidden>Clear form</button>
@@ -219,6 +224,7 @@
   <script src="config.js"></script>
   <script src="auth.js"></script>
   <script src="shiftclock.js"></script>
+  <script src="photos.js"></script>
   <script>
     var ISSUES = {
       "Coal Despatch": ["Coal shortage", "Tipper shortage", "Loader breakdown",
@@ -239,6 +245,7 @@
     var minutes = document.getElementById("minutes");
     var msg = document.getElementById("msg");
     var save = document.getElementById("save");
+    var photo = null;   // optional photo evidence control (only when the database has it set up, migration 12)
 
     function picked(name) {
       var r = form.querySelector("input[name=" + name + "]:checked");
@@ -329,7 +336,7 @@
     form.addEventListener("input", writeDraft);
     form.addEventListener("change", writeDraft);
     document.getElementById("clear-draft").addEventListener("click", function () {
-      form.reset(); fillIssues(); clearDraft();
+      form.reset(); fillIssues(); clearDraft(); if (photo) photo.clear();
       var n = document.getElementById("draft-note"); n.hidden = true;
     });
 
@@ -363,7 +370,16 @@
         // The database function records who you are, the time, status Open and both priorities.
         var res = await MineShift.db.rpc("create_exception", row);
         if (res.error) throw new Error(res.error.message);
-        show("ok", "Exception recorded successfully.");
+        var okText = "Exception recorded successfully.";
+        if (photo && photo.hasPhoto()) {
+          // The exception is saved. Now the photo (a separate step; a failure here never undoes the report).
+          var pv = photo.value();
+          var problem = await MinePhotos.upload(res.data, "report", pv);
+          if (problem) okText += " But the photo could not be added. Error: " + problem + " You can add the picture as a remark photo on the Dashboard.";
+          else okText += " Photo evidence added.";
+        }
+        if (photo) photo.clear();
+        show("ok", okText);
         form.reset();
         fillIssues();
         clearDraft();
@@ -411,6 +427,12 @@
         });
         setInterval(function () { document.getElementById("sb-time").textContent = currentInfo().asOf; }, 20000);
         form.hidden = false;
+        MinePhotos.available().then(function (yes) {            // photo evidence appears only once migration 12 has been run
+          if (!yes) return;
+          photo = MinePhotos.field();
+          document.getElementById("photo-slot").appendChild(photo.node);
+          document.getElementById("photo-card").hidden = false;
+        });
       } else {
         document.getElementById("denied").hidden = false;
       }

@@ -53,6 +53,19 @@
     return res.data.session;
   }
 
+  // Password recovery (Supabase sends the e-mail; nobody ever types or sees another person's password).
+  // The link in the e-mail brings the person back to login.html, which asks for a new password.
+  async function requestPasswordReset(email) {
+    var back = new URL("login.html", window.location.href).href;
+    var res = await needDb().auth.resetPasswordForEmail(email, { redirectTo: back });
+    if (res.error) throw new Error(res.error.message);
+  }
+
+  async function setNewPassword(password) {
+    var res = await needDb().auth.updateUser({ password: password });
+    if (res.error) throw new Error(res.error.message);
+  }
+
   async function signOut() {
     var res = await needDb().auth.signOut();
     if (res.error) throw new Error(res.error.message);
@@ -200,6 +213,8 @@
     get error() { return state.error; },
     getSession: getSession,
     signIn: signIn,
+    requestPasswordReset: requestPasswordReset,
+    setNewPassword: setNewPassword,
     signOut: signOut,
     loadAccess: loadAccess,
     can: can,

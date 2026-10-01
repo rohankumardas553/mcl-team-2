@@ -9,7 +9,7 @@
   time. The Progress Log at the end of this file is our handover logbook.
 
 ## What we are building
-- A tool with at most 4 pages: index.html (entry page), dashboard.html
+- A tool with at most 4 pages (plus accountadmin.html, the Data Keeper page, added in the presentation sprint): index.html (entry page), dashboard.html
   (dashboard: what needs action now), analytics.html (historical analytics and
   period comparison and forecast readiness for management) and login.html (sign in). The shared helper file auth.js and the
   analytics code file analytics.js and the shift-time helper shiftclock.js are not pages.
@@ -69,7 +69,9 @@
   (new exceptions must be in the shift running now in India time; for a database
   that already ran 04 and 07) with 10-ist-shift-control-rollback.sql to undo it and
   10-ist-shift-control-verify.sql (ONE verification table after 10; every line must say
-  OK). 04b-link-accounts.sql links accounts ONLY (use it instead of re-running 04).
+  OK), then 12-photo-evidence.sql (optional photos; private Storage bucket) and 13-account-admin.sql (Data Keeper:
+  password-reset e-mail, switch account on / off), each with a -rollback file (both are additive; the pages work
+  without them). 04b-link-accounts.sql links accounts ONLY (use it instead of re-running 04).
   After 07 has been run NEVER re-run 04-auth-foundation.sql: it re-opens helper
   functions that 07 hid. 04 now also contains the IST shift check, so a fresh setup
   (04, 07) needs no 10. See "Final lockdown" below.
@@ -389,7 +391,7 @@
   Response Time, Resolution Time, Reopened Issues), each with ONE line "Previous: X ·
   change (percent)" when a comparison exists; Management Summary (the Phase D factual
   sentences, renamed); two trend charts (Exceptions Over Time, Recorded Impact Over
-  Time, with the previous-period dashed line); "Where is the operational impact?" (top 5
+  Time, with the previous-period dashed line); two donuts (Unresolved Exceptions / Impact Minutes by Category); "Where is the operational impact?" (top 5
   locations by impact minutes, top 5 recurring issues by exceptions); Items for
   Management Review (first 5 of the existing candidate list, "View all" opens the full
   table); Data Available for Future Forecasting (four rows: Ready = "Enough data",
@@ -520,6 +522,34 @@
   Dates and times read "26 Sep 2026, 00:35". Numbers never show NaN, Infinity,
   undefined or null; unavailable values show a dash or a plain sentence.
 
+## Photo evidence, password recovery and composition charts (presentation sprint)
+- PHOTO EVIDENCE (photos.js, database/12-photo-evidence.sql): optional photo on a new exception (report), a remark,
+  a closure request or Resolve-with-note (closure) and a reopen. "Add photo evidence" + preview + Change / Remove + "Photo
+  note" (up to 200 characters). The page shrinks the picture to a JPEG of at most 1600 px (this also removes hidden camera
+  data such as GPS). Files live in the PRIVATE Storage bucket "exception-photos" (5 MB, JPEG / PNG / WebP) under
+  <exception id>/<random id>.jpg; the database holds only the path, caption, event, who and when (table exception_photos,
+  append-only). Nothing is stored as base64. The 8 action functions are NOT changed: the action runs first, then the file
+  is uploaded and attach_exception_photo() links it. The link is accepted only if the same person did that action in the
+  last 30 minutes (report photo: within 30 minutes of reporting) and uploaded the file themselves. Overmen never see photos
+  attached to management remarks or reopen events (same rule as audit). Views use short-lived (10 minute) signed links
+  made by the signed-in person; there is no public link. A failed photo never undoes the saved action; the page says so.
+  The pages hide the feature until 12 has been run. "Confirm Resolved" (confirming someone else's closure request) has no
+  photo field.
+- PASSWORD RECOVERY (login.html, auth.js): "Forgot password?" asks Supabase to e-mail a reset link (same message whether or
+  not the address has an account; one request per 60 seconds per page). The link returns to login.html, which asks for a
+  new password (8+ characters). The Supabase Auth "Redirect URLs" list must contain the site's login.html address.
+- DATA KEEPER (accountadmin.js, database/13-account-admin.sql): NOT a new role. profiles.can_administer (yes / no, default
+  no, set only in the SQL Editor) lets that account see an "Account administration" menu link (shown on the Dashboard) that opens accountadmin.html. The page needs a sign-in, asks the database (my_admin()) and shows "Not authorised" to everybody else, with no data requested. It can:
+  list accounts, "Send password reset" (the database logs the request and returns the account e-mail; the browser then asks
+  Supabase to send the standard reset e-mail; nobody can choose or see another person's password), and Switch off / on
+  (profiles.active; never your own account). Every action is written to account_admin_log (append-only, no browser
+  access; read it in the SQL Editor). Everyone else sees no panel and the functions refuse them.
+- COMPOSITION CHARTS (analytics.html / analytics.js): two donuts in the overview, "Unresolved Exceptions by Category" and
+  "Unresolved Impact Minutes by Category": exceptions created in the selected period that are not Resolved, by category.
+  The legend shows value and percentage of the total. They follow the same filters and periods; no date rule changed.
+- TESTS: tests/permissions/perm_part8.sh (SQL), tests/browser/presentation_final.js, tests/browser/donut_charts.js
+  (needs REAL_CHART). tests/fixtures/storage_emu.sql stands in for Supabase Storage in the scratch database only.
+
 ## Final lockdown (07-lockdown.sql)
 - WHEN: run it ONLY after the login pages are live on the main branch (Vercel
   production) and every role has passed the preview tests. The old public pages
@@ -591,7 +621,7 @@
 - Problem: Shift problems in Coal Despatch and Dust Suppression are not recorded in one place.
 - Who records / who decides: Shift staff record; shift managers decide (to confirm).
 - Table name and columns: shift_exceptions - id, created_at, shift, location, category, issue_type, description, impact_minutes, urgency, status, resolved_at, plus (from 04) created_by, created_by_role, reported_priority, current_priority, priority_changed_by, priority_changed_by_role, priority_changed_at, priority_change_reason, started_by, started_at, closure_requested_by, closure_requested_at, resolved_by, updated_at, and name snapshots created_by_name, priority_changed_by_name, started_by_name, closure_requested_by_name, resolved_by_name. Other tables: profiles, exception_remarks, exception_audit.
-- Pages: index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics, period-to-period comparison and forecast readiness (Shift In-Charge and above); login.html = sign in (helper: auth.js)
+- Pages: accountadmin.html = Data Keeper account administration (can_administer only; logic in accountadmin.js); index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics, period-to-period comparison and forecast readiness (Shift In-Charge and above); login.html = sign in (helper: auth.js)
 
 ## Progress Log (newest entry at the bottom)
 - Phase 0 (starter): placeholder index.html, config.js without settings and
@@ -620,3 +650,4 @@
 - Management Overview restructure (Claude): analytics.html, analytics.js and CLAUDE.md only. The page now opens as a "Management Overview" (6 cards with one-line comparisons, Management Summary, two trend charts, top 5 impact locations and recurring issues, 5 review items, plain-language data availability for forecasting) with everything else kept under "View Detailed Analysis" and, inside it, "Methodology & Data Details". No calculation, threshold, readiness state, filter, query, permission, SQL or other page changed. Tested against a scratch local Postgres copy with the 09 presentation demo data (814 rows); not tested on the live Supabase.
 - IST shift control (Claude): new shiftclock.js (one definition of IST time, shift and Operational Day), database/10-ist-shift-control.sql with 10-ist-shift-control-rollback.sql (create_exception now checks the shift against the database clock; helper functions; shift_clock()), index.html (shift shown read-only, automatic, re-checked at submit), dashboard.html (Operational Day / Current Shift / As of bar, Live / All days / One operational day, future shifts disabled, carried-forward label, IST times, auto-update at shift change), analytics.html and analytics.js (partial-day note only; no calculation change). Roles, maker-checker, lifecycle actions, KPI / Top 3 / OVERDUE / chart definitions and all analytics calculations are unchanged. Tested against a scratch local Postgres copy with a simulated clock; not tested on the live Supabase. Pre-merge review fixes: 10-ist-shift-control-verify.sql (single post-10 verification; supersedes 07 line A06), 04 now contains the shift check and 04b-link-accounts.sql links accounts without re-running 04, open action forms survive a shift change, trusted-clock recovery and periodic re-sync. Data Keeper: run 10-ist-shift-control.sql after merge, then 10-ist-shift-control-verify.sql (every line OK).
 - Final product pass (Claude): Shift Handover panel, closure-confirmation ageing, active age display, shorter origin wording, impact-minutes wording, unsent-form draft (dashboard.html, index.html, shiftclock.js, analytics footnote); tests moved into tests/ with a README and a runner; database/11-demo-shift-label-cleanup.sql with rollback (presentation only); docs/PILOT_TRANSITION.md, docs/ACCESS_GOVERNANCE.md and docs/ANALYTICS_OPERATIONAL_DAY.md (analytics calculations unchanged; Operational-Day mode evaluated and deferred; audit visibility reviewed, no change). Tested against a scratch local Postgres copy with a simulated clock; not tested on the live Supabase.
+- Presentation sprint (Claude): optional photo evidence (photos.js, 12-photo-evidence.sql + rollback, private bucket), password recovery on login.html, Data Keeper account panel (accountadmin.js, 13-account-admin.sql + rollback; can_administer flag, no new role, no service key), two unresolved-by-category donuts on analytics.html. The 8 action functions, roles, maker-checker, IST rules and all analytics calculations are unchanged. Tested against a scratch local Postgres copy; Supabase Storage is stood in by a stub there, so photo upload must be tested once on the live preview after 12 is run. Data Keeper: run 12 and 13, add the login.html address to the Supabase Auth redirect URLs, set can_administer for your own account.

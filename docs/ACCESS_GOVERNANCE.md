@@ -46,3 +46,18 @@ update public.profiles set active = false where user_id = '<user id>';   -- exam
 5. Note the date, who reviewed, and what changed (keep with the backup files).
 
 Linking a new account: create the user in Supabase (Authentication > Users), then run `04b-link-accounts.sql` for the fictional test accounts, or insert the profile row for a real person with the right role (ask the project lead).
+
+## Password recovery and the Data Keeper panel (migration 13)
+- Any user can start a recovery from "Forgot password?" on the sign-in page. Supabase e-mails a one-time link; the person
+  chooses the new password on login.html. Nobody else sees or sets it.
+- One-time Supabase setting: Authentication > URL Configuration > Redirect URLs must contain the site's login.html address
+  (production and, if wanted, the preview address). Without it the link cannot return to the app. The built-in Supabase
+  e-mail sender has a low hourly limit; for a larger pilot configure the organisation's own SMTP.
+- The Data Keeper is identified by profiles.can_administer = yes (set only in the SQL Editor, for one or two accounts). It is
+  not a role: that person keeps their normal role and permissions. The panel at the bottom of the Dashboard can send a reset
+  e-mail to any account and switch an account on or off (never your own). Each action is recorded in account_admin_log
+  (read it in the SQL Editor; the browser cannot read or change it).
+- To remove the privilege: update public.profiles set can_administer = false where user_id = ...;
+- Photo evidence (migration 12): files are in the private bucket "exception-photos"; only signed-in people with an active role
+  can upload, and only people who may see an exception can view its photos. Photos cannot be edited or deleted from the app.
+  Delete or retention actions are a Data Keeper task in the Supabase Storage screen and are not part of the app.
