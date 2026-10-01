@@ -58,7 +58,7 @@ async function verify(p,label,preset,f,t,fl){ const W=whereFor(preset,f,t,fl); c
     check(label+': line charts sum to the totals',R.charts['c-created'].type==='line'&&R.charts['c-created'].data.reduce((a,b)=>a+b,0)===E.total&&R.charts['c-impact'].data.reduce((a,b)=>a+b,0)===E.imp);
     check(label+': Strategic Management Attention: 1 to 5 statements (period comparison)',R.attention.length>=1&&R.attention.length<=5&&R.attention.every(x=>x.length>10),R.attention);
   } else {
-    check(label+': empty state: charts say "No data", attention says not enough data',R.nodata===6&&R.attention.length===1&&/^No exceptions in the selected period or the previous period\./.test(R.attention[0])&&R.constraintsEmpty&&R.kpi[2]==='—'&&R.kpiSub[0]==='No exceptions in the selected period',R);
+    check(label+': empty state: 6 charts + 2 donuts say "No data", attention says not enough data',R.nodata===8&&R.attention.length===1&&/^No exceptions in the selected period or the previous period\./.test(R.attention[0])&&R.constraintsEmpty&&R.kpi[2]==='—'&&R.kpiSub[0]==='No exceptions in the selected period',R);
   }
   return {R,E};
 }
