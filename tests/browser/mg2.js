@@ -21,7 +21,7 @@ const VIS=`const V=e=>e.getClientRects().length>0 && !e.closest('details:not([op
  // ---- visible by default @1280
  const p=await newPage('gm1@example.com',{width:1280,height:900}); await p.goto(URL); await T(p,3000);
  const s=await p.evaluate(`(()=>{${VIS} return {canv:[...document.querySelectorAll('canvas')].filter(V).map(e=>e.id),tables:[...document.querySelectorAll('table')].filter(V).length,H:document.documentElement.scrollHeight};})()`);
- check('default: only 2 charts visible',s.canv.join()==='c-created,c-impact',s.canv);
+ check('default: only the 2 trend charts and 2 unresolved donuts are visible',s.canv.join()==='c-created,c-impact,c-act-count,c-act-impact',s.canv);
  check('default: no tables visible',s.tables===0,s.tables);
  check('default page height @1280x900 is 2-4 screens',s.H/900>=2&&s.H/900<=4,s.H);
  // ---- filters update visible and hidden
