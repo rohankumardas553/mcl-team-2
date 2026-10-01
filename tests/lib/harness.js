@@ -75,7 +75,7 @@ window.supabase={createClient:function(){
    onAuthStateChange:function(){}}};}};`;
 const FAKE_CH=`window.Chart=function(c,cfg){window.__chart=cfg;(window.__charts=window.__charts||{})[c.id]=cfg;this.data=cfg.data;this.update=function(){};this.destroy=function(){};};`;
 const srv=http.createServer((q,r)=>{const u=q.url.split('?')[0];const f=path.join(ROOT,u==='/'?'index.html':u);
- fs.readFile(f,(e,d)=>{if(e){r.writeHead(404);r.end();}else{const ext=path.extname(f).slice(1); r.writeHead(200,{'content-type':({html:'text/html',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',svg:'image/svg+xml',css:'text/css'})[ext]||'text/javascript'});r.end(d);}});}).listen(8765);
+ fs.readFile(f,(e,d)=>{if(e){r.writeHead(404);r.end();}else{r.writeHead(200,{'content-type':f.endsWith('.html')?'text/html':'text/javascript'});r.end(d);}});}).listen(8765);
 let browser;
 async function newPage(email, viewport, tz){
   if(!browser) browser=await chromium.launch(process.env.PW_CHROMIUM?{executablePath:process.env.PW_CHROMIUM}:{}).catch(()=>chromium.launch({executablePath:'/opt/pw-browsers/chromium'}));
