@@ -1,0 +1,38 @@
+source "$(dirname "${BASH_SOURCE[0]:-$0}")/../lib/env.sh"
+
+source $LIB/perm_test.sh
+echo "=== D. lifecycle: Resolve clears the active closure request; Reopen starts a new cycle"
+X=$($PSQL -c "set role authenticated; select set_config('request.jwt.claim.sub','${UID_[overman1]}',false); select create_exception((select shift_clock()->>'shift'),'Siding 1','Coal Despatch','Weather','lifecycle test',20,'Medium')" | tail -1)
+$PSQL -c "set role authenticated; select set_config('request.jwt.claim.sub','${UID_[overman2]}',false); select start_exception('$X')" >/dev/null
+$PSQL -c "set role authenticated; select set_config('request.jwt.claim.sub','${UID_[overman1]}',false); select request_closure('$X','Work verified in the field')" >/dev/null
+val "names recorded (created, started, requested)" "Test Overman One|Test Overman Two|Test Overman One" postgres "select created_by_name||'|'||started_by_name||'|'||closure_requested_by_name from shift_exceptions where id='$X'"
+val "closure pending before resolve" "t" postgres "select closure_requested_at is not null from shift_exceptions where id='$X'"
+ok  "sic resolves" sic1 "select resolve_exception('$X')"
+val "AFTER RESOLVE: closure request fields cleared" "|||" postgres "select coalesce(closure_requested_by::text,'')||'|'||coalesce(closure_requested_at::text,'')||'|'||coalesce(closure_requested_by_name,'')||'|' from shift_exceptions where id='$X'"
+val "AFTER RESOLVE: resolved fields set" "Resolved|Test Shift In-Charge One|t|t" postgres "select status||'|'||resolved_by_name||'|'||(resolved_at is not null)::text||'|'||(resolved_by is not null)::text from shift_exceptions where id='$X'"
+val "closure request still in audit history" "1" postgres "select count(*) from exception_audit where exception_id='$X' and action='closure_requested'"
+val "closure note still in remarks" "1" postgres "select count(*) from exception_remarks where exception_id='$X' and body='Work verified in the field'"
+val "resolve audit names the closure request" "t" postgres "select old_value like 'In progress (closure requested by Test Overman One at %' from exception_audit where exception_id='$X' and action='resolved'"
+A1=$($PSQL -c "select count(*) from exception_audit where exception_id='$X'"); R1=$($PSQL -c "select count(*) from exception_remarks where exception_id='$X'")
+ok  "sic reopens" sic1 "select reopen_exception('$X','Found a fault after closing')"
+val "AFTER REOPEN: all cycle fields cleared, status Open" "Open|||||||||" postgres "select status||'|'||coalesce(resolved_at::text,'')||'|'||coalesce(resolved_by::text,'')||'|'||coalesce(resolved_by_name,'')||'|'||coalesce(closure_requested_by::text,'')||'|'||coalesce(closure_requested_at::text,'')||'|'||coalesce(started_by::text,'')||'|'||coalesce(started_at::text,'')||'|'||coalesce(started_by_name,'')||'|' from shift_exceptions where id='$X'"
+val "created_by kept after reopen" "Test Overman One" postgres "select created_by_name from shift_exceptions where id='$X'"
+val "audit only grew (nothing removed)" "t" postgres "select count(*) > $A1 from exception_audit where exception_id='$X'"
+val "remarks unchanged by reopen" "$R1" postgres "select count(*) from exception_remarks where exception_id='$X'"
+val "earlier start / closure / resolve still in audit" "3" postgres "select count(*) from exception_audit where exception_id='$X' and action in ('started','closure_requested','resolved')"
+ok  "second cycle: start again" overman2 "select start_exception('$X')"
+val "second cycle has fresh started fields" "t" postgres "select started_at is not null and started_by_name='Test Overman Two' from shift_exceptions where id='$X'"
+echo "--- decline clears fields and keeps history"
+ok  "request closure (cycle 2)" overman1 "select request_closure('$X','Second cycle work done')"
+ok  "sic declines" sic1 "select decline_closure('$X','Still leaking at the joint')"
+val "decline: fields cleared" "|" postgres "select coalesce(closure_requested_by_name,'')||'|'||coalesce(closure_requested_at::text,'') from shift_exceptions where id='$X'"
+val "decline: history kept" "t" postgres "select count(*) >= 2 from exception_audit where exception_id='$X' and action = 'closure_requested'"
+echo "--- least privilege: no staff directory"
+err "people view is gone" "does not exist" overman1 "select * from people"
+err "profiles: overman cannot list others" "" overman1 "select 1 where false"
+val "profiles: only own row visible" "1" overman1 "select count(*) from profiles"
+echo "--- new location names enforced by create_exception"
+err "old location rejected" "valid location" overman1 "select create_exception((select shift_clock()->>'shift'),'Coal Face A','Coal Despatch','Weather','x',5,'Low')"
+ok  "each new location accepted" overman1 "select create_exception((select shift_clock()->>'shift'),'ABC Patch','Coal Despatch','Weather','l1',5,'Low'), create_exception((select shift_clock()->>'shift'),'XYZ Patch','Coal Despatch','Weather','l2',5,'Low'), create_exception((select shift_clock()->>'shift'),'Haul Road A','Haul Road','Potholes','l3',5,'Low'), create_exception((select shift_clock()->>'shift'),'Haul Road B','Haul Road','Potholes','l4',5,'Low'), create_exception((select shift_clock()->>'shift'),'MDP Junction','Coal Despatch','Weather','l5',5,'Low'), create_exception((select shift_clock()->>'shift'),'Stockyard 1','Coal Despatch','Weather','l6',5,'Low'), create_exception((select shift_clock()->>'shift'),'Siding 1','Coal Despatch','Weather','l7',5,'Low'), create_exception((select shift_clock()->>'shift'),'Siding 2','Coal Despatch','Weather','l8',5,'Low')"
+err "anon cannot forge name columns" "cannot be edited" anon "update shift_exceptions set resolved_by_name='x' where id='$X'"
+echo "PASS=$PASS FAIL=$FAIL"
