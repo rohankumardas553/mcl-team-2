@@ -1,0 +1,15 @@
+source "$(dirname "${BASH_SOURCE[0]:-$0}")/../lib/env.sh"
+
+source $LIB/perm_test.sh
+echo "=== B. the CURRENT live website (anon, old open rules) must keep working after 04"
+ok  "anon old-style insert works" anon "insert into shift_exceptions(shift,location,category,issue_type,description,impact_minutes,urgency,status) values ('First','Siding A','Coal Despatch','Weather','old page entry',10,'Low','Open')"
+val "old insert: priorities filled from urgency" "Low|Low|Low|Open" postgres "select reported_priority||'|'||current_priority||'|'||urgency||'|'||status from shift_exceptions where description='old page entry'"
+ok  "anon insert with forged created_by is neutralised" anon "insert into shift_exceptions(shift,location,category,issue_type,description,impact_minutes,urgency,status,created_by,resolved_at) values ('First','Siding A','Coal Despatch','Weather','forged entry',10,'High','Resolved','${UID_[gm1]}',now())"
+val "forged fields wiped, status forced Open" "|Open|" postgres "select coalesce(created_by::text,'')||'|'||status||'|'||coalesce(resolved_at::text,'') from shift_exceptions where description='forged entry'"
+ok  "anon old-style Start" anon "update shift_exceptions set status='In progress' where description='old page entry'"
+ok  "anon old-style Resolve" anon "update shift_exceptions set status='Resolved', resolved_at=now() where description='old page entry'"
+val "old page changes are audited as direct" "2" postgres "select count(*) from exception_audit a join shift_exceptions e on e.id=a.exception_id where e.description='old page entry' and a.action='direct_change'"
+val "old page: dashboard select still works (anon)" "t" anon "select count(*) > 0 from shift_exceptions"
+ok  "Data Keeper SQL Editor insert (02/03 style) still works" postgres "insert into shift_exceptions(shift,location,category,issue_type,description,impact_minutes,urgency,status) values ('Night','Siding B','Coal Quality','Grade concern','dk entry',5,'Medium','Open')"
+val "dk insert priorities filled" "Medium|Medium" postgres "select reported_priority||'|'||current_priority from shift_exceptions where description='dk entry'"
+echo "PASS=$PASS FAIL=$FAIL"

@@ -78,8 +78,41 @@
     return pad2(p.d) + " " + MONTHS[p.m - 1] + ", " + pad2(p.hh) + ":" + pad2(p.mm);
   }
 
+  // ---- shift windows and handover helpers
+  function dayKeyShift(key, n) {                                         // add n days to a "YYYY-MM-DD" key
+    var a = key.split("-"), d = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2] + n));
+    return d.getUTCFullYear() + "-" + pad2(d.getUTCMonth() + 1) + "-" + pad2(d.getUTCDate());
+  }
+  function opDayStartMs(key) { var a = key.split("-"); return Date.UTC(+a[0], +a[1] - 1, +a[2], 5, 0, 0) - IST_OFFSET; }   // 05:00 IST
+  var SHIFT_OFFSET_H = { First: 0, Second: 8, Night: 16 };
+  // [start, end) of one shift of one Operational Day, in UTC milliseconds. Night runs 21:00 -> 05:00 the next morning.
+  function shiftWindow(opDayKey, shift) {
+    var s = opDayStartMs(opDayKey) + SHIFT_OFFSET_H[shift] * HOUR;
+    return { startMs: s, endMs: s + 8 * HOUR };
+  }
+  // The shift that has just ended: Second -> First (same day), Night -> Second (same day),
+  // First -> Night of the PREVIOUS Operational Day (it started at 21:00 IST the evening before).
+  function previousShift(nowInfo) {
+    var shift = nowInfo.shift === "Second" ? "First" : nowInfo.shift === "Night" ? "Second" : "Night";
+    var day = nowInfo.shift === "First" ? dayKeyShift(nowInfo.opDay, -1) : nowInfo.opDay;
+    var w = shiftWindow(day, shift);
+    return { shift: shift, opDay: day, opDayLabel: labelOfKey(day), startMs: w.startMs, endMs: w.endMs };
+  }
+  function shortLabelOfKey(k) { var a = k.split("-"); return a[2] + " " + MONTHS[+a[1] - 1]; }          // "30 Sep"
+  // Factual age: "less than 1 min", "18 min", "1 h 35 min", "2 h", "1 d 3 h". Never negative.
+  function ageText(ms) {
+    if (!(ms >= 60000)) return "less than 1 min";
+    var m = Math.floor(ms / 60000);
+    if (m < 60) return m + " min";
+    var h = Math.floor(m / 60), r = m % 60;
+    if (h < 24) return r ? h + " h " + r + " min" : h + " h";
+    var d = Math.floor(h / 24), hh = h % 24;
+    return hh ? d + " d " + hh + " h" : d + " d";
+  }
+
   var api = { IST_OFFSET: IST_OFFSET, SHIFTS: SHIFTS, parts: parts, shiftAt: shiftAt, opDayAt: opDayAt, opDayOfRow: opDayOfRow,
-              info: info, availability: availability, nextBoundary: nextBoundary, labelOfKey: labelOfKey, fmt: fmt };
+              info: info, availability: availability, nextBoundary: nextBoundary, labelOfKey: labelOfKey, fmt: fmt,
+              shiftWindow: shiftWindow, previousShift: previousShift, dayKeyShift: dayKeyShift, shortLabelOfKey: shortLabelOfKey, ageText: ageText };
 
   // ---- browser part: trusted time, periodic re-sync and a "something changed" watcher
   var offset = 0, synced = false, lastSyncAt = 0, theDb = null, syncing = null;

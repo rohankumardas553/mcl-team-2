@@ -463,6 +463,39 @@
   browser calendar day, not the Operational Day. There is no historical-entry path
   (backdating) for any role; propose one separately if it is ever needed.
 
+## Shift handover, ageing and drafts (dashboard.html, index.html)
+- SHIFT HANDOVER (compact panel at the top of the dashboard, every role): "From <previous shift> (<day>)
+  to <current shift> now". The previous shift is Second -> First, Night -> Second (same Operational Day) and
+  First -> Night of the PREVIOUS Operational Day (shiftclock.js previousShift; IST windows, never browser
+  midnight). Chips: unresolved now, High priority, awaiting confirmation, opened in the previous shift and
+  still open, reopened in the previous shift (Shift In-Charge and above). Up to 5 items: awaiting
+  confirmation first (oldest request first), then High, then what the previous shift opened. "View handover
+  details" lists them and, for Shift In-Charge and above, the changes during the previous shift (Started,
+  Closure requested, Resolved, Reopened, Priority changed, with who and when in IST). It is built from rows already
+  loaded; the only extra read is the "reopened" audit lines since the start of the previous shift (rank 2+).
+  It ignores the category / shift / location filters. It is facts only: no score, no recommendation.
+- AGES (facts only, no new OVERDUE rule): every unresolved card, Top 3 item and handover item shows "Open for
+  1 h 35 min" or "In progress for 42 min" (In progress counts from started_at). Closure requests show
+  "Awaiting confirmation . 18 min". Ages tick every 30 s without rebuilding the list. OVERDUE stays High +
+  unresolved + more than 30 minutes.
+- ORIGIN WORDING: an unresolved item from an earlier shift of today reads "From First shift"; from an earlier
+  Operational Day "From Night shift . 30 Sep". Nothing is shown for the current shift.
+- IMPACT MINUTES: the reporter's ESTIMATE of the operational impact of an exception at the time of reporting
+  (0 to 1440). It is not measured downtime or financial loss and cannot be edited later. The entry form,
+  dashboard note and the analytics footnote say so.
+- DRAFT (entry form): unsent field values (location, category, issue, description, minutes, priority; never the
+  shift or any token) are kept in sessionStorage per person, restored after a refresh or a failed save, and
+  cleared after a successful save or "Clear form". No offline queue.
+
+## Tests, docs and presentation-only SQL
+- Tests live in tests/ (README.md explains setup). They run ONLY against a local scratch Postgres and refuse
+  to run otherwise. NEVER run them against live production Supabase data.
+- docs/PILOT_TRANSITION.md (presentation to real pilot), docs/ACCESS_GOVERNANCE.md (Data Keeper checklist),
+  docs/ANALYTICS_OPERATIONAL_DAY.md (analytics limitation, decision, audit visibility review).
+- database/11-demo-shift-label-cleanup.sql (+ -rollback): PRESENTATION DATA CLEANUP ONLY. Corrects the shift
+  label of rows carrying the demo marker so it matches created_at in IST; keeps the old labels in
+  demo_shift_label_backup; never touches other rows. Not part of a pilot; not run automatically.
+
 ## Wording conventions on the Analytics page (presentation only)
 - Audience: a management presentation. Sentences must read naturally, say each
   thing once, and never sound like program output. This is wording only: the
@@ -586,3 +619,4 @@
 - Analytics language and readability pass (Claude): wording and layout of the text on analytics.html only (analytics.js and analytics.html). No calculation, sort order, threshold, readiness state, filter, query, permission, SQL or other page changed. Natural comparison sentences (period named once above the list), one set of terms for the time measures, shorter readiness cards (evidence plus a reason only when Limited or Not Ready), one shared lifecycle note, clearer overall readiness text, consistent labels in Historical Coverage, Data Concentration and Recurrence Coverage, grammatical threshold text, plain empty and no-comparison messages, consistent dates and numbers. Tested on the fictional presentation data in a scratch copy; not tested on the live Supabase.
 - Management Overview restructure (Claude): analytics.html, analytics.js and CLAUDE.md only. The page now opens as a "Management Overview" (6 cards with one-line comparisons, Management Summary, two trend charts, top 5 impact locations and recurring issues, 5 review items, plain-language data availability for forecasting) with everything else kept under "View Detailed Analysis" and, inside it, "Methodology & Data Details". No calculation, threshold, readiness state, filter, query, permission, SQL or other page changed. Tested against a scratch local Postgres copy with the 09 presentation demo data (814 rows); not tested on the live Supabase.
 - IST shift control (Claude): new shiftclock.js (one definition of IST time, shift and Operational Day), database/10-ist-shift-control.sql with 10-ist-shift-control-rollback.sql (create_exception now checks the shift against the database clock; helper functions; shift_clock()), index.html (shift shown read-only, automatic, re-checked at submit), dashboard.html (Operational Day / Current Shift / As of bar, Live / All days / One operational day, future shifts disabled, carried-forward label, IST times, auto-update at shift change), analytics.html and analytics.js (partial-day note only; no calculation change). Roles, maker-checker, lifecycle actions, KPI / Top 3 / OVERDUE / chart definitions and all analytics calculations are unchanged. Tested against a scratch local Postgres copy with a simulated clock; not tested on the live Supabase. Pre-merge review fixes: 10-ist-shift-control-verify.sql (single post-10 verification; supersedes 07 line A06), 04 now contains the shift check and 04b-link-accounts.sql links accounts without re-running 04, open action forms survive a shift change, trusted-clock recovery and periodic re-sync. Data Keeper: run 10-ist-shift-control.sql after merge, then 10-ist-shift-control-verify.sql (every line OK).
+- Final product pass (Claude): Shift Handover panel, closure-confirmation ageing, active age display, shorter origin wording, impact-minutes wording, unsent-form draft (dashboard.html, index.html, shiftclock.js, analytics footnote); tests moved into tests/ with a README and a runner; database/11-demo-shift-label-cleanup.sql with rollback (presentation only); docs/PILOT_TRANSITION.md, docs/ACCESS_GOVERNANCE.md and docs/ANALYTICS_OPERATIONAL_DAY.md (analytics calculations unchanged; Operational-Day mode evaluated and deferred; audit visibility reviewed, no change). Tested against a scratch local Postgres copy with a simulated clock; not tested on the live Supabase.

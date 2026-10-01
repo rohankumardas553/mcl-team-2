@@ -1,0 +1,34 @@
+process.env.TZ='Asia/Kolkata';
+const REPO=require('path').resolve(__dirname,'..','..');
+const PGHOST=process.env.MS_PGHOST||'/var/tmp/mspg', PGPORT=process.env.MS_PGPORT||'5544';
+const {OPLOG,newPage,check,done,psql,asUser}=require('../lib/harness.js');
+const URL='http://localhost:8765/'; const T=async(p,ms=500)=>p.waitForTimeout(ms);
+const badges=async p=>p.evaluate(()=>['r-overall-badge','r-count-badge','r-impact-badge','r-start-badge','r-resolve-badge'].map(i=>document.getElementById(i).textContent));
+const HIDE=process.env.FORCE_NIGHT?'true':(()=>{const cur=psql("select public.ist_shift(now())").out; const un={First:"'Second','Night'",Second:"'Night'",Night:""}[cur]; return un?`not (public.ist_operational_date(created_at)=public.ist_operational_date(now()) and shift in (${un}))`:'true';})();  // rows of today whose shift has not started are hidden on the dashboard
+(async()=>{
+ console.log('=== demo data on the real pages (Phase E analytics from PR #18 + current dashboard)');
+ const p=await newPage('gm1@example.com',{width:1280,height:1000}); await p.goto(URL+'analytics.html'); await T(p,3500);
+ await p.selectOption('#f-range','all'); await T(p,2500);
+ let b=await badges(p); check('All time, no filter: overall / count / impact / start / resolve = Ready x5',JSON.stringify(b)===JSON.stringify(['Ready','Ready','Ready','Ready','Ready']),b);
+ await p.selectOption('#f-cat','Coal Despatch'); await T(p,2200); b=await badges(p); check('All time, Coal Despatch = Ready x5',b.every(x=>x==='Ready'),b);
+ await p.selectOption('#f-cat','Coal Quality'); await p.selectOption('#f-loc','Stockyard 1'); await T(p,2200); b=await badges(p); check('Coal Quality @ Stockyard 1 = Limited (overall)',b[0]==='Limited',b);
+ await p.screenshot({path:require('os').tmpdir()+'/'+'demo_limited.png',fullPage:false});
+ await p.selectOption('#f-loc','Siding 2'); await T(p,2200); b=await badges(p); check('Coal Quality @ Siding 2 = Not Ready (overall)',b[0]==='Not Ready',b);
+ await p.click('#f-reset'); await T(p,2500); b=await badges(p); check('Default Last 30 days = Limited overall (history under 56 days)',b[0]==='Limited',b);
+ await p.selectOption('#f-range','90'); await T(p,2500); b=await badges(p); check('Last 90 days = Ready x5',b.every(x=>x==='Ready'),b);
+ check('no page errors on analytics',p.errs.length===0,p.errs.join(';'));
+ const reads=OPLOG.filter(o=>o.table==='shift_exceptions'); check('analytics reads all demo rows in pages of 1000 (paging in use)',reads.length>0);
+ console.log('=== dashboard with the demo data');
+ const d=await newPage('gm1@example.com',{width:1280,height:1000}); await d.goto(URL+'dashboard.html'); await T(d,4000); await d.selectOption('#f-day','all'); await T(d,500);
+ const s=await d.evaluate(()=>({cards:[...document.querySelectorAll('.card .n')].map(e=>e.textContent),top3:[...document.querySelectorAll('#top3 .item')].length,items:document.querySelectorAll('#list > .item').length,overdue:document.querySelectorAll('#list .badge.overdue').length,err:document.getElementById('msg').textContent}));
+ const exp=psql(`select count(*) from shift_exceptions where ${HIDE}`).out; check('dashboard lists every exception (paged read) = '+exp,String(s.items)===exp,[s.items,exp]);
+ const kOpen=psql(`select count(*) from shift_exceptions where status in ('Open','In progress') and ${HIDE}`).out; check('dashboard Open Exceptions card = SQL ('+kOpen+')',s.cards[0]===kOpen,s.cards);
+ check('dashboard shows Top 3 and no error',s.top3===3&&!/Sorry/.test(s.err),s);
+ await d.screenshot({path:require('os').tmpdir()+'/'+'demo_dash.png',fullPage:false});
+ console.log('=== Overman sees his own history from the demo');
+ const o=await newPage('overman1@example.com',{width:1280,height:900}); await o.goto(URL+'dashboard.html'); await T(o,3500);
+ const act=psql(`select count(*) from shift_exceptions where status<>'Resolved' and ${HIDE}`).out; const n1=await o.evaluate(()=>document.querySelectorAll('#list > .item').length); check('overman1 active list = all '+act+' active exceptions',String(n1)===act,[n1,act]);
+ await o.click('#tab-history'); await T(o,400); const h=await o.evaluate(()=>document.querySelectorAll('#list > .item').length); const mine=psql(`select count(*) from shift_exceptions where status='Resolved' and created_by=(select id from auth.users where email='overman1@example.com')`).out;
+ check('overman1 My history = Resolved he created ('+mine+')',String(h)===mine&&+mine>50,[h,mine]);
+ await done();
+})();

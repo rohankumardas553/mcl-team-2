@@ -1,0 +1,14 @@
+const REPO=require('path').resolve(__dirname,'..','..');
+const PGHOST=process.env.MS_PGHOST||'/var/tmp/mspg', PGPORT=process.env.MS_PGPORT||'5544';
+const cp=require('child_process'); const {psql,asUser,done,check}=require('../lib/harness.js'); const R=(REPO+'/database/');
+const run=f=>cp.spawnSync('psql',['-h',PGHOST,'-p',PGPORT,'-U','postgres','-q','-d','ms','-v','ON_ERROR_STOP=1','-f',R+f],{encoding:'utf8'});
+const cur=psql('select public.ist_shift(now())').out, other=['First','Second','Night'].find(x=>x!==cur);
+const mk=sh=>asUser('sic1@example.com',`select public.create_exception('${sh}','Siding 1','Coal Despatch','Coal shortage','rb test',5,'Low')`);
+const before=+psql('select count(*) from shift_exceptions').out;
+check('with 10 active, a wrong shift is rejected',/current shift is/.test(mk(other).err));
+let r=run('10-ist-shift-control-rollback.sql'); check('rollback runs',r.status===0,r.stderr); r=run('10-ist-shift-control-rollback.sql'); check('rollback is safe to run twice',r.status===0,r.stderr);
+check('after rollback any shift is accepted again (previous behaviour)',!/ERROR/.test(mk(other).err));
+check('rollback removed the helper functions',psql(`select count(*) from pg_proc where proname in ('ist_shift','ist_operational_date','shift_clock','_check_live_shift','_shift_start_text')`).out==='0');
+check('rollback changed no existing record',+psql('select count(*) from shift_exceptions').out===before+1);
+r=run('10-ist-shift-control.sql'); check('migration can be re-applied after rollback',r.status===0,r.stderr); check('and enforces again',/current shift is/.test(mk(other).err));
+done();

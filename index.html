@@ -15,14 +15,15 @@
     .bar { max-width: 1240px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap;
            align-items: center; justify-content: space-between; gap: 8px 24px; }
     .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: .3px; }
-    .mark { width: 38px; height: 38px; border-radius: 9px; background: #fff; color: var(--navy);
-            display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
+    /* Official MCL logo (supplied image, not altered): fixed height, width follows the original proportions */
+    .mcl-logo { display: block; flex: none; height: 40px; width: auto; border-radius: 6px; }
     nav { display: flex; flex-wrap: wrap; gap: 6px; }
     nav a { color: #fff; text-decoration: none; font-weight: 600; font-size: 16px; padding: 10px 16px;
             min-height: 44px; display: inline-flex; align-items: center; border-radius: 10px; }
     nav a:hover { background: rgba(255,255,255,.14); }
     nav a.active { background: #fff; color: var(--navy); }
 
+    @media (max-width: 480px) { .brand { font-size: 18px; gap: 8px; } .mcl-logo { height: 32px; } }
     .right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
     .who { display: flex; align-items: center; gap: 12px; }
     .who-text { display: flex; flex-direction: column; line-height: 1.2; text-align: right; }
@@ -53,6 +54,7 @@
     .sb-line { font-size: 16px; margin-top: 4px; }
     .sb-note { margin: 8px 0 0; font-size: 14px; color: #4b5d80; }
     .sb-note.changed { color: #7c2d12; font-weight: 700; }
+    #clear-draft { margin-top: 10px; width: 100%; min-height: 52px; font: inherit; font-weight: 700; color: var(--navy); background: #fff; border: 2px solid var(--navy); border-radius: 12px; cursor: pointer; }
     .field { margin-bottom: 16px; }
     .field:last-child { margin-bottom: 0; }
     .label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 17px; }
@@ -115,7 +117,7 @@
 <body>
   <header>
     <div class="bar">
-      <div class="brand"><span class="mark">MS</span>MineShift Command</div>
+      <div class="brand"><img class="mcl-logo" src="assets/mcl-logo.jpg" width="94" height="40" alt="Mahanadi Coalfields Limited (MCL)">MineShift Command</div>
       <div class="right">
         <nav id="nav"></nav>
         <div class="who" id="who"></div>
@@ -187,8 +189,9 @@
       <section class="card">
         <h2><span class="n">3</span>How serious</h2>
         <div class="field">
-          <label class="label" for="minutes">Impact Minutes <span class="hint">(time lost or expected to be lost)</span></label>
-          <input id="minutes" type="number" inputmode="numeric" min="0" max="1440" step="1" required>
+          <label class="label" for="minutes">Impact Minutes <span class="hint">(your estimate)</span></label>
+          <input id="minutes" type="number" inputmode="numeric" min="0" max="1440" step="1" required aria-describedby="minutes-help">
+          <p class="sb-note" id="minutes-help">Estimated minutes of operational impact associated with this exception at the time of reporting. It is an estimate, not a measured loss, and it cannot be edited later.</p>
           <div class="chips" aria-label="Quick minutes">
             <button type="button" data-min="15">15</button>
             <button type="button" data-min="30">30</button>
@@ -207,6 +210,8 @@
       </section>
 
       <button type="submit" id="save">Add Exception</button>
+      <p class="sb-note" id="draft-note" hidden></p>
+      <button type="button" id="clear-draft" class="clear" hidden>Clear form</button>
     </form>
   </main>
   <footer>Training prototype &ndash; all data is made up</footer>
@@ -271,6 +276,36 @@
       if (kind) msg.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
+    // ---- Unsent draft: ordinary field values only (never a login token, never the shift). Kept in sessionStorage so an
+    // accidental refresh or a dropped connection does not lose typing; cleared after a successful save, or by "Clear form".
+    var draftKey = null;
+    var DRAFT_FIELDS = ["location", "description", "minutes"];
+    function readDraft() {
+      try { return JSON.parse(sessionStorage.getItem(draftKey) || "null"); } catch (e) { return null; }
+    }
+    function writeDraft() {
+      if (!draftKey) return;
+      var d = { location: document.getElementById("location").value, category: picked("category"), issue: issue.value,
+                description: document.getElementById("description").value, minutes: minutes.value, priority: picked("priority") };
+      var empty = !d.location && !d.category && !d.description && !d.minutes && !d.priority;
+      try { if (empty) sessionStorage.removeItem(draftKey); else sessionStorage.setItem(draftKey, JSON.stringify(d)); } catch (e) { /* storage blocked: no draft, the form still works */ }
+      document.getElementById("clear-draft").hidden = empty;
+    }
+    function clearDraft() { try { if (draftKey) sessionStorage.removeItem(draftKey); } catch (e) {} document.getElementById("clear-draft").hidden = true; }
+    function restoreDraft() {
+      var d = readDraft();
+      if (!d) return;
+      if (d.location) document.getElementById("location").value = d.location;
+      if (d.category) { var c = form.querySelector("input[name=category][value=\"" + d.category + "\"]"); if (c) { c.checked = true; fillIssues(); } }
+      if (d.issue) issue.value = d.issue;
+      document.getElementById("description").value = d.description || "";
+      minutes.value = d.minutes || "";
+      if (d.priority) { var p = form.querySelector("input[name=priority][value=\"" + d.priority + "\"]"); if (p) p.checked = true; }
+      var n = document.getElementById("draft-note");
+      n.hidden = false; n.textContent = "Your unsent entry was restored. It is kept on this device until you save it or press Clear form.";
+      document.getElementById("clear-draft").hidden = false;
+    }
+
     function fillIssues() {
       var list = ISSUES[picked("category")] || [];
       issue.innerHTML = "";
@@ -290,7 +325,13 @@
     });
 
     Array.prototype.forEach.call(document.querySelectorAll(".chips button"), function (b) {
-      b.addEventListener("click", function () { minutes.value = b.getAttribute("data-min"); });
+      b.addEventListener("click", function () { minutes.value = b.getAttribute("data-min"); writeDraft(); });
+    });
+    form.addEventListener("input", writeDraft);
+    form.addEventListener("change", writeDraft);
+    document.getElementById("clear-draft").addEventListener("click", function () {
+      form.reset(); fillIssues(); clearDraft();
+      var n = document.getElementById("draft-note"); n.hidden = true;
     });
 
     form.addEventListener("submit", async function (ev) {
@@ -326,6 +367,8 @@
         show("ok", "Exception recorded successfully.");
         form.reset();
         fillIssues();
+        clearDraft();
+        document.getElementById("draft-note").hidden = true;
         renderShift(currentInfo());
         document.getElementById("sb-note").className = "sb-note";
         document.getElementById("sb-note").textContent = "A new exception is recorded in the shift that is running when you press the button.";
@@ -359,6 +402,8 @@
       if (MineShift.can("create", ctx.access)) {
         await MineShiftClock.sync(MineShift.db);              // trusted time from the database (falls back to the device clock)
         renderShift(currentInfo());
+        draftKey = "mineshift.draft.v1." + ctx.session.user.id;       // one draft per person on a shared device
+        restoreDraft();
         MineShiftClock.watch(function (cur, old) {
           cur = currentInfo();
           renderShift(cur);

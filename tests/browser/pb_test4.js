@@ -1,0 +1,60 @@
+const REPO=require('path').resolve(__dirname,'..','..');
+const PGHOST=process.env.MS_PGHOST||'/var/tmp/mspg', PGPORT=process.env.MS_PGPORT||'5544';
+const {newPage,check,done,psql,asUser}=require('../lib/harness.js');
+const URL='http://localhost:8765/';
+const T=async(p,ms=450)=>p.waitForTimeout(ms);
+const card=(p,d)=>p.locator('#list > .item',{has:p.locator('.desc',{hasText:d})});
+const btn=(c,name)=>c.locator('.actions .act',{hasText:new RegExp('^'+name+'$')});
+const mk=(desc)=>asUser('overman1@example.com',`select create_exception((select shift_clock()->>'shift'),'Siding 1','Coal Despatch','Weather','${desc}',45,'High')`);
+const start=(desc,u='sic2')=>asUser(u+'@example.com',`select start_exception((select id from shift_exceptions where description='${desc}'))`);
+const open=async(u)=>{const p=await newPage(u+'@example.com',{width:1280,height:1000}); await p.goto(URL+'dashboard.html'); await T(p,700); return p;};
+const db=sql=>psql(sql).out;
+const AWAIT='Awaiting confirmation by another authorised officer.';
+(async()=>{
+ console.log('=== 13. maker-checker in the pages');
+ mk('MC ui one'); start('MC ui one');
+ let s1=await open('sic1'); let c=card(s1,'MC ui one');
+ await btn(c,'Request closure').click(); await c.locator('.formbox textarea').fill('Checked on site by sic1'); await c.locator('.formbox .go').click(); await T(s1);
+ c=card(s1,'MC ui one'); const txt=await c.innerText();
+ check('sic1 (requester) sees the pill and the "Awaiting confirmation" message', /Closure requested by Test Shift In-Charge One/.test(txt)&&txt.includes(AWAIT), txt);
+ check('sic1 (requester) has NO Decline closure and NO Confirm Resolved control', (await c.locator('.act',{hasText:/Decline closure|Confirm Resolved|^Resolve$/}).count())===0);
+ check('sic1 (requester) also has no second Request closure', (await btn(c,'Request closure').count())===0);
+ const s2=await open('sic2'); c=card(s2,'MC ui one');
+ check('sic2 sees Decline closure and Confirm Resolved, and no waiting message', (await btn(c,'Decline closure').count())===1&&(await btn(c,'Confirm Resolved').count())===1&&!(await c.innerText()).includes(AWAIT));
+ const m2=await open('manager2'); c=card(m2,'MC ui one');
+ check('manager2 (can_operate) may review a Shift In-Charge request', (await btn(c,'Decline closure').count())===1&&(await btn(c,'Confirm Resolved').count())===1);
+ const m1=await open('manager1'); c=card(m1,'MC ui one');
+ check('manager1 (no can_operate): no review controls, no waiting message', (await c.locator('.act',{hasText:/Decline closure|Confirm Resolved|Resolve/}).count())===0&&!(await c.innerText()).includes(AWAIT));
+ // sic2 declines with a reason, then sic1 requests again, sic2 confirms
+ c=card(s2,'MC ui one'); await btn(c,'Decline closure').click(); await c.locator('.formbox textarea').fill('Photo missing from the request'); await c.locator('.formbox .go').click(); await T(s2);
+ check('sic2 declined: pill cleared in DB', db(`select coalesce(closure_requested_by_name,'')='' from shift_exceptions where description='MC ui one'`)==='t');
+ await s1.reload(); await T(s1,700); c=card(s1,'MC ui one');
+ check('after the decline sic1 sees Request closure again (no waiting message)', (await btn(c,'Request closure').count())===1&&!(await c.innerText()).includes(AWAIT));
+ await btn(c,'Request closure').click(); await c.locator('.formbox textarea').fill('Photo added, please confirm'); await c.locator('.formbox .go').click(); await T(s1);
+ await s2.reload(); await T(s2,700); c=card(s2,'MC ui one');
+ await btn(c,'Confirm Resolved').click(); await T(s2);
+ check('sic2 confirmed sic1\'s request: Resolved by sic2', db(`select status||'|'||resolved_by_name from shift_exceptions where description='MC ui one'`)==='Resolved|Test Shift In-Charge Two');
+ // the Overman requester also sees the message and has no controls
+ mk('MC ui two'); start('MC ui two');
+ const o1=await open('overman1'); c=card(o1,'MC ui two');
+ await btn(c,'Request closure').click(); await c.locator('.formbox textarea').fill('Overman verified the work'); await c.locator('.formbox .go').click(); await T(o1);
+ c=card(o1,'MC ui two');
+ check('overman requester sees "Awaiting confirmation" and no controls', (await c.innerText()).includes(AWAIT)&&(await c.locator('.act',{hasText:/Decline|Resolve|Confirm/}).count())===0);
+ const s1b=await open('sic1'); c=card(s1b,'MC ui two');
+ check('sic1 (not the requester) sees the review controls for the overman request', (await btn(c,'Confirm Resolved').count())===1&&(await btn(c,'Decline closure').count())===1);
+ // stale page: the database refuses with the exact text
+ mk('MC ui three'); start('MC ui three','sic2');
+ const s1c=await open('sic1'); c=card(s1c,'MC ui three');
+ check('sic1 sees a plain Resolve (no request yet)', (await btn(c,'Resolve').count())===1);
+ asUser('sic1@example.com',`select request_closure((select id from shift_exceptions where description='MC ui three'),'sic1 requested from another tab')`);
+ await btn(c,'Resolve').click(); await c.locator('.formbox textarea').fill('Trying to resolve my own request'); await c.locator('.formbox .go').click(); await T(s1c);
+ const er=await c.locator('.inline-err').innerText();
+ check('database refusal shown exactly (stale page)', /You cannot confirm or decline your own closure request\. Another Shift In-Charge or authorised Manager must review it\./.test(er), er);
+ check('  ...and nothing changed', db(`select status from shift_exceptions where description='MC ui three'`)==='In progress');
+ // direct resolve without a request still works for a shift in-charge
+ mk('MC ui four'); start('MC ui four');
+ const s1d=await open('sic1'); c=card(s1d,'MC ui four'); await btn(c,'Resolve').click(); await c.locator('.formbox textarea').fill('Cleared by crew, nothing pending'); await c.locator('.formbox .go').click(); await T(s1d);
+ check('direct Resolve with a note (no closure request) still works', db(`select status from shift_exceptions where description='MC ui four'`)==='Resolved');
+ check('no page errors', [s1,s2,m1,m2,o1,s1b,s1c,s1d].every(p=>p.errs.length===0));
+ await done();
+})();
