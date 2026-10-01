@@ -1467,15 +1467,16 @@
     }
   }
 
-  // Today is only partly recorded. When the period reaches today (India time), say so; nothing is calculated differently.
+  // The present operational day is still in progress. When the period reaches the present moment, say so (nothing is
+  // calculated differently and no shift is excluded). The time and shift come from the India-time helper.
   function drawPartialNote(range) {
     var n = $("partial-note");
     var i = window.MineShiftClock ? MineShiftClock.info(MineShiftClock.now()) : null;
-    // range.to is exclusive (the day after the last chosen day); an open end (Last N days, All time) reaches today.
-    var includesToday = i && (!range.to || range.to.getTime() > startOfDay(new Date()).getTime());
-    n.hidden = !includesToday;
-    n.textContent = includesToday
-      ? "The current operational day is included up to " + i.asOf + " (" + i.shift + " shift). Shifts that have not started yet are not counted."
+    // range.to is exclusive; an open end (Last N days, All time) reaches the present.
+    var reachesNow = i && (!range.to || range.to.getTime() > i.ms);
+    n.hidden = !reachesNow;
+    n.textContent = reachesNow
+      ? "Current-period data may be incomplete because the present operational day is still in progress. As of " + i.asOf + " (" + i.shift + " shift)."
       : "";
   }
 

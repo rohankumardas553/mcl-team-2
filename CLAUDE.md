@@ -424,17 +424,25 @@
   only refreshes the shift and asks the user to review; the second press saves.
 - OTHER ACTIONS: Start, remarks, priority change, closure request, decline, resolve,
   reopen and management remarks have NO time rule. Old exceptions stay actionable.
-- DASHBOARD: a bar shows Operational Day, Current Shift and "As of ... IST". Default
-  view "Live" = every unresolved exception (carried forward from earlier days stays
-  visible, labelled "Carried forward from <day>, <shift> shift") + the current Operational
-  Day's resolved records whose shift has started. "All days" = everything. "One
-  operational day" = that day only (never a future day). Shift choices not yet started on
-  the current Operational Day are disabled ("Night - available from 21:00 IST"), never shown
-  as zero; completed days allow all shifts. Cards, Top 3, chart and OVERDUE keep their
-  definitions (they work on unresolved exceptions). Times are shown in IST.
+- DASHBOARD: a bar shows Operational Day, Current Shift and "As of ... IST". Scoping rule
+  (applies to the list, cards, Top 3 and chart, and to every role):
+  1. Rows of EARLIER operational days are never hidden by the shift rule: unresolved
+     carry-forward work stays visible and actionable, labelled "Carried forward from <day>,
+     <shift> shift"; completed days allow all three shifts.
+  2. Rows of the CURRENT operational day are shown only if their shift has already started
+     (First always; Second from 13:00; Night from 21:00). A current-day row labelled with a
+     future shift (possible only with old or inconsistent data) is hidden in EVERY view -
+     Live, All days and One operational day - until that shift starts.
+  Views: "Live" (default) = unresolved rows of any day + the current operational day's
+  resolved rows; "All days" = everything allowed by rules 1 and 2; "One operational day" = that
+  day's rows (never a future day). Shift choices not yet started on the current operational day
+  are disabled ("Night - available from 21:00 IST"), never shown as zero. Cards, Top 3, chart
+  and OVERDUE keep their definitions (unresolved exceptions, after rules 1 and 2). Times are IST.
 - ANALYTICS: calculations, filters and periods are unchanged (periods still use the
-  browser's calendar days). When the period reaches today a note says the current
-  operational day is included only up to the as-of time. No shift is disabled there.
+  browser's calendar days). When the period reaches the present moment a factual note says
+  "Current-period data may be incomplete because the present operational day is still in
+  progress. As of <time> IST (<shift> shift)." It does NOT claim that any shift is excluded
+  (the analytics queries do not exclude any). No shift is disabled there.
 - KNOWN LIMITATIONS: some fictional demo rows (09) have a shift label that does not match
   their IST created_at (about 15%); they are left as they are. Analytics periods use the
   browser calendar day, not the Operational Day. There is no historical-entry path

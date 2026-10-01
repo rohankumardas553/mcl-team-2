@@ -380,14 +380,21 @@
       }
       return { mode: mode };
     }
+    // A row of the CURRENT Operational Day whose shift has not started yet (only possible with old or inconsistent data,
+    // because the database now refuses such new entries). It is never shown, in any view, until that shift starts.
+    // Rows of earlier operational days are never hidden by this rule, so unresolved carry-forward work stays visible.
+    function isFutureShiftOfToday(r) {
+      if (MineShiftClock.opDayOfRow(r.created_at) !== clockInfo.opDay) return false;
+      var a = MineShiftClock.availability(clockInfo, clockInfo.opDay)[r.shift];
+      return !!a && !a.available;
+    }
     function inScope(r, sc) {
+      if (isFutureShiftOfToday(r)) return false;                   // applies to Live, All days and One operational day
       if (sc.mode === "all") return true;
       var od = MineShiftClock.opDayOfRow(r.created_at);
       if (sc.mode === "day") return od === sc.day;
-      // live
-      if (r.status !== "Resolved") return true;                    // unresolved work is never hidden
-      if (od !== clockInfo.opDay) return false;
-      return MineShiftClock.availability(clockInfo, od)[r.shift] ? MineShiftClock.availability(clockInfo, od)[r.shift].available : true;
+      // live: unresolved work from any day (carry-forward) + the current Operational Day's resolved records
+      return r.status !== "Resolved" || od === clockInfo.opDay;
     }
     // Shift availability for the day being looked at: future shifts of the current Operational Day are disabled
     // (never shown as zero); completed days and "All days" allow every shift.
