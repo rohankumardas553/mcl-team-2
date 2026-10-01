@@ -77,6 +77,7 @@
                 background: #fff; border: 1px solid var(--line); border-left: 6px solid #f59e0b; border-radius: 12px; font-size: 15px; }
     .clockbar b { color: var(--navy); }
     .clockbar .cb-shift { display: inline-block; padding: 2px 12px; border-radius: 999px; background: var(--navy); color: #fff; font-weight: 800; }
+    .clockbar .cb-pending { flex: 1 1 100%; color: #7c2d12; font-weight: 700; }
     .badge.carry { display: block; width: fit-content; max-width: 100%; margin-top: 6px; white-space: normal; background: #fff7ed; color: #9a3412; border: 2px solid #f59e0b; }
     .filters #f-date-wrap { grid-column: 1 / -1; }
     .filters input[type=date] { width: 100%; font: inherit; padding: 12px; min-height: 56px; color: var(--ink);
@@ -205,6 +206,7 @@
       <span><b>Operational Day:</b> <span id="cb-day">&ndash;</span></span>
       <span><b>Current Shift:</b> <span class="cb-shift" id="cb-shift">&ndash;</span></span>
       <span><b>As of:</b> <span id="cb-asof">&ndash;</span></span>
+      <span id="cb-pending" class="cb-pending" hidden>The shift changed. The list will refresh when you close the form you are filling in.</span>
     </div>
 
     <div class="tabs" id="tabs" hidden>
@@ -542,6 +544,7 @@
       try {
         var res = await MineShift.db.rpc(fn, args);
         if (res.error) throw new Error(res.error.message);
+        if (window.__clearPendingRefresh) window.__clearPendingRefresh();
         await loadAll();
         renderView();
         toast("ok", okText);
@@ -903,10 +906,26 @@
       }
       // Left open across a shift change (05:00, 13:00, 21:00 IST): update the clock, the available shifts and the data.
       setInterval(renderClock, 20000);
-      MineShiftClock.watch(async function () {
-        renderClock();
+      // A shift change must never wipe what someone is typing. While an inline action form (Request closure, Resolve,
+      // Decline, Reopen, Change priority, remark) is open, only the clock and the shift choices are updated; the data
+      // refresh is kept pending and runs as soon as the form is closed, cancelled or saved.
+      var pendingRefresh = false;
+      function actionFormOpen() { return !!document.querySelector("#list .formbox"); }
+      function showPending(on) { document.getElementById("cb-pending").hidden = !on; }
+      async function refreshWhenIdle() {
+        if (actionFormOpen()) { pendingRefresh = true; showPending(true); return; }
+        pendingRefresh = false; showPending(false);
         try { await loadAll(); } catch (e) { /* keep the old rows; the next change or refresh will try again */ }
         renderView();
+      }
+      window.__pendingRefresh = function () { return pendingRefresh; };           // read by the tests
+      window.__clearPendingRefresh = function () { pendingRefresh = false; showPending(false); };   // a save reloads the data itself
+      new MutationObserver(function () { if (pendingRefresh && !actionFormOpen()) refreshWhenIdle(); })
+        .observe(document.getElementById("list"), { childList: true, subtree: true });
+      MineShiftClock.watch(function () {
+        renderClock();
+        updateShiftOptions();                                        // choices follow the new shift at once
+        refreshWhenIdle();
       });
       try {
         await loadAll();

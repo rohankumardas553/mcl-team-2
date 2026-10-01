@@ -242,6 +242,15 @@
     }
     // ---- live shift (India time). The shift is never chosen by hand; the database checks it again when saving.
     var shownShift = "", shownDay = "", needsReview = false;   // needsReview: the shift changed while the form was open
+    var START_AT = { First: "05:00", Second: "13:00", Night: "21:00" };
+    // Device time corrected by the trusted database clock. If the database has just told us the shift (error message),
+    // that authoritative shift is used for the next 10 minutes even when the device clock is wrong and the re-sync failed.
+    function currentInfo() {
+      var i = MineShiftClock.info(MineShiftClock.now());
+      var a = MineShiftClock.authoritativeShift();
+      if (a && a !== i.shift) { i = Object.assign({}, i, { shift: a, shiftStart: START_AT[a] }); }
+      return i;
+    }
     function renderShift(i) {
       shownShift = i.shift; shownDay = i.opDay;
       document.getElementById("sb-shift").textContent = i.shift;
@@ -287,7 +296,7 @@
     form.addEventListener("submit", async function (ev) {
       ev.preventDefault();
       // The shift is worked out again now. If it changed while the form was open, stop once and say so.
-      var nowInfo = MineShiftClock.info(MineShiftClock.now());
+      var nowInfo = currentInfo();
       if (needsReview || nowInfo.shift !== shownShift || nowInfo.opDay !== shownDay) {
         needsReview = false;
         renderShift(nowInfo);
@@ -317,16 +326,26 @@
         show("ok", "Exception recorded successfully.");
         form.reset();
         fillIssues();
-        renderShift(MineShiftClock.info(MineShiftClock.now()));
+        renderShift(currentInfo());
         document.getElementById("sb-note").className = "sb-note";
         document.getElementById("sb-note").textContent = "A new exception is recorded in the shift that is running when you press the button.";
       } catch (e) {
         var text = "Sorry, the exception could not be saved. Error: " + e.message;
-        if (/current shift is/i.test(e.message)) {          // the database clock says the shift is different: refresh and ask again
-          var ci = MineShiftClock.info(MineShiftClock.now());
+        if (/current shift is/i.test(e.message)) {
+          // The database clock says the shift is different from what this page showed. Recover, keep everything typed,
+          // and ask the user to review. Order: 1) ask the database for its time again, 2) if that fails use the shift
+          // named in the database message (authoritative), 3) tell the user.
+          var named = MineShiftClock.shiftFromError(e.message);
+          var resynced = await MineShiftClock.sync(MineShift.db);
+          var after = MineShiftClock.info(MineShiftClock.now());
+          MineShiftClock.setAuthoritativeShift(!resynced || after.shift !== named ? named : null);
+          var ci = currentInfo();
+          needsReview = false;
           renderShift(ci);
           showShiftChanged(ci);
-          text = e.message;
+          text = "The current shift is " + ci.shift + " (since " + ci.shiftStart + " IST)." +
+            (resynced ? "" : " This device's clock may be wrong.") +
+            " Nothing you typed was lost. Please review and press the button again.";
         }
         if (MineShift.isSessionError(e.message)) text += " Your sign-in may have ended. Please sign in again.";
         show("err", text);
@@ -339,13 +358,14 @@
       if (!ctx) return;
       if (MineShift.can("create", ctx.access)) {
         await MineShiftClock.sync(MineShift.db);              // trusted time from the database (falls back to the device clock)
-        renderShift(MineShiftClock.info(MineShiftClock.now()));
+        renderShift(currentInfo());
         MineShiftClock.watch(function (cur, old) {
+          cur = currentInfo();
           renderShift(cur);
           showShiftChanged(cur);
           needsReview = true;                                  // the next press of the button only asks the user to check
         });
-        setInterval(function () { document.getElementById("sb-time").textContent = MineShiftClock.info(MineShiftClock.now()).asOf; }, 20000);
+        setInterval(function () { document.getElementById("sb-time").textContent = currentInfo().asOf; }, 20000);
         form.hidden = false;
       } else {
         document.getElementById("denied").hidden = false;

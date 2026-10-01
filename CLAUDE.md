@@ -67,8 +67,12 @@
   authorities may reopen; for a database that already ran 04 and 07) with
   08-management-reopen-rollback.sql to undo it, then 10-ist-shift-control.sql
   (new exceptions must be in the shift running now in India time; for a database
-  that already ran 04 and 07) with 10-ist-shift-control-rollback.sql to undo it.
-  See "Final lockdown" below.
+  that already ran 04 and 07) with 10-ist-shift-control-rollback.sql to undo it and
+  10-ist-shift-control-verify.sql (ONE verification table after 10; every line must say
+  OK). 04b-link-accounts.sql links accounts ONLY (use it instead of re-running 04).
+  After 07 has been run NEVER re-run 04-auth-foundation.sql: it re-opens helper
+  functions that 07 hid. 04 now also contains the IST shift check, so a fresh setup
+  (04, 07) needs no 10. See "Final lockdown" below.
 - Tables (all in the public schema): shift_exceptions (the records),
   profiles (who each login account is and its role), exception_remarks
   (remarks) and exception_audit (history). Every table has
@@ -422,6 +426,17 @@
   13:00 IST), not Night. Please review and submit again."), for every role, with no
   bypass. If the shift changes while the form is open, the first press of the button
   only refreshes the shift and asks the user to review; the second press saves.
+  If the database rejects the shift anyway (device clock wrong), the page asks the database
+  for its time again; if that fails it uses the shift named in the database message for
+  10 minutes, tells the user, keeps everything typed, and lets them press the button again.
+- TRUSTED CLOCK: pages take the database time once at start and again when the tab becomes
+  visible, the network returns, about every 30 minutes, and when the device clock jumps (sleep,
+  wake, clock changed by hand). A failed re-sync keeps the last trusted offset; it never falls
+  back to the device clock after one successful sync.
+- OPEN FORMS: a shift change at 05:00 / 13:00 / 21:00 never wipes an open inline action form
+  (Request closure, Resolve, Decline, Reopen, Change priority, remark). The clock and the shift
+  choices update at once; the data refresh waits ("The list will refresh when you close the form")
+  and runs when the form is closed, cancelled or saved.
 - OTHER ACTIONS: Start, remarks, priority change, closure request, decline, resolve,
   reopen and management remarks have NO time rule. Old exceptions stay actionable.
 - DASHBOARD: a bar shows Operational Day, Current Shift and "As of ... IST". Scoping rule
@@ -492,7 +507,9 @@
 - AFTER IT: the browser can never insert, update or delete anything directly.
   Every change goes through the 8 functions, so roles, the priority rank lock
   and maker-checker keep working exactly as before.
-- CHECK IT: the last query of the file gives one result table. Section A must
+- CHECK IT (after 10: use 10-ist-shift-control-verify.sql instead; the old line A06
+  "ONLY the 8 action functions, my_access and app_rank" is superseded because
+  shift_clock() is one more allowed function): the last query of the file gives one result table. Section A must
   show OK on all 9 lines; section C must show anon all false and authenticated
   true only for select; section D must show signed-out can run = false for
   every function.
@@ -568,4 +585,4 @@
 - Phase E forecast readiness (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no function, no extra database request, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). New "Forecast Readiness" section: Not Ready / Limited / Ready for Exception Count, Impact Minutes, Time-to-Start and Time-to-Resolve forecasts, each with written factual reasons, plus an overall state, Readiness Notes, Historical Coverage, Data Concentration and Recurrence Coverage. Prototype engineering thresholds (data sufficiency, not operational or statistical) are shown on the page and listed above. Ready does not mean statistically validated, accurate or reliable. Reusable gate for a later phase: MineAnalytics.assessReadiness and isReady. NO forecasting, no scores and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not reconstructed. Tested against a scratch local Postgres copy with 2,326 demo rows and hand-built boundary datasets; not tested on the live Supabase.
 - Analytics language and readability pass (Claude): wording and layout of the text on analytics.html only (analytics.js and analytics.html). No calculation, sort order, threshold, readiness state, filter, query, permission, SQL or other page changed. Natural comparison sentences (period named once above the list), one set of terms for the time measures, shorter readiness cards (evidence plus a reason only when Limited or Not Ready), one shared lifecycle note, clearer overall readiness text, consistent labels in Historical Coverage, Data Concentration and Recurrence Coverage, grammatical threshold text, plain empty and no-comparison messages, consistent dates and numbers. Tested on the fictional presentation data in a scratch copy; not tested on the live Supabase.
 - Management Overview restructure (Claude): analytics.html, analytics.js and CLAUDE.md only. The page now opens as a "Management Overview" (6 cards with one-line comparisons, Management Summary, two trend charts, top 5 impact locations and recurring issues, 5 review items, plain-language data availability for forecasting) with everything else kept under "View Detailed Analysis" and, inside it, "Methodology & Data Details". No calculation, threshold, readiness state, filter, query, permission, SQL or other page changed. Tested against a scratch local Postgres copy with the 09 presentation demo data (814 rows); not tested on the live Supabase.
-- IST shift control (Claude): new shiftclock.js (one definition of IST time, shift and Operational Day), database/10-ist-shift-control.sql with 10-ist-shift-control-rollback.sql (create_exception now checks the shift against the database clock; helper functions; shift_clock()), index.html (shift shown read-only, automatic, re-checked at submit), dashboard.html (Operational Day / Current Shift / As of bar, Live / All days / One operational day, future shifts disabled, carried-forward label, IST times, auto-update at shift change), analytics.html and analytics.js (partial-day note only; no calculation change). Roles, maker-checker, lifecycle actions, KPI / Top 3 / OVERDUE / chart definitions and all analytics calculations are unchanged. Tested against a scratch local Postgres copy with a simulated clock; not tested on the live Supabase. Data Keeper: run 10-ist-shift-control.sql after merge, then re-run the 07 verification query.
+- IST shift control (Claude): new shiftclock.js (one definition of IST time, shift and Operational Day), database/10-ist-shift-control.sql with 10-ist-shift-control-rollback.sql (create_exception now checks the shift against the database clock; helper functions; shift_clock()), index.html (shift shown read-only, automatic, re-checked at submit), dashboard.html (Operational Day / Current Shift / As of bar, Live / All days / One operational day, future shifts disabled, carried-forward label, IST times, auto-update at shift change), analytics.html and analytics.js (partial-day note only; no calculation change). Roles, maker-checker, lifecycle actions, KPI / Top 3 / OVERDUE / chart definitions and all analytics calculations are unchanged. Tested against a scratch local Postgres copy with a simulated clock; not tested on the live Supabase. Pre-merge review fixes: 10-ist-shift-control-verify.sql (single post-10 verification; supersedes 07 line A06), 04 now contains the shift check and 04b-link-accounts.sql links accounts without re-running 04, open action forms survive a shift change, trusted-clock recovery and periodic re-sync. Data Keeper: run 10-ist-shift-control.sql after merge, then 10-ist-shift-control-verify.sql (every line OK).

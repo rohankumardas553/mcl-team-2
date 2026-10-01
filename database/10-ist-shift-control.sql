@@ -15,6 +15,12 @@
 -- function. Existing records, their created_at and their shift values are NOT
 -- changed. Safe to run twice. Rollback: 10-ist-shift-control-rollback.sql.
 -- For a database that already ran 04 and 07 (and 08, 09 if wanted).
+-- A fresh setup does not need this file: 04-auth-foundation.sql now contains the same functions.
+--
+-- VERIFY AFTERWARDS with 10-ist-shift-control-verify.sql (one result table). After this file the
+-- old 07 check "A06 Signed-in users can run ONLY the 8 action functions, my_access and app_rank"
+-- is superseded: shift_clock() is now the one extra function signed-in users may run, and the
+-- verify file checks the exact post-10 list. Ignore A06 of the old 07 query; use the verify file.
 -- =============================================================================
 begin;
 
