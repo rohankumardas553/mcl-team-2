@@ -46,6 +46,13 @@
                margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
     .card h2 .n { width: 26px; height: 26px; border-radius: 50%; background: var(--navy); color: #fff;
                   font-size: 14px; display: inline-flex; align-items: center; justify-content: center; letter-spacing: 0; }
+    .shiftbox { border: 2px solid var(--navy); border-radius: 12px; background: #f8fafd; padding: 12px 14px; }
+    .sb-main { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .sb-shift { font-size: 28px; font-weight: 800; color: var(--navy); }
+    .sb-k { font-size: 14px; font-weight: 700; color: #33466b; }
+    .sb-line { font-size: 16px; margin-top: 4px; }
+    .sb-note { margin: 8px 0 0; font-size: 14px; color: #4b5d80; }
+    .sb-note.changed { color: #7c2d12; font-weight: 700; }
     .field { margin-bottom: 16px; }
     .field:last-child { margin-bottom: 0; }
     .label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 17px; }
@@ -134,12 +141,13 @@
       <section class="card">
         <h2><span class="n">1</span>When and where</h2>
         <div class="field">
-          <span class="label" id="shift-label">Shift</span>
-          <div class="choices three" role="radiogroup" aria-labelledby="shift-label">
-            <label class="choice"><input type="radio" name="shift" value="First" required><span>First</span></label>
-            <label class="choice"><input type="radio" name="shift" value="Second"><span>Second</span></label>
-            <label class="choice"><input type="radio" name="shift" value="Night"><span>Night</span></label>
+          <span class="label" id="shift-label">Shift (set automatically from the time in India)</span>
+          <div class="shiftbox" id="shiftbox" role="group" aria-labelledby="shift-label">
+            <div class="sb-main"><span class="sb-k">Current Shift</span><span class="sb-shift" id="sb-shift">&ndash;</span></div>
+            <div class="sb-line"><span class="sb-k">Operational Day</span> <span id="sb-day">&ndash;</span></div>
+            <div class="sb-line"><span class="sb-k">Time</span> <span id="sb-time">&ndash;</span></div>
           </div>
+          <p class="sb-note" id="sb-note">A new exception is recorded in the shift that is running when you press the button.</p>
         </div>
         <div class="field">
           <label class="label" for="location">Location</label>
@@ -206,6 +214,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="auth.js"></script>
+  <script src="shiftclock.js"></script>
   <script>
     var ISSUES = {
       "Coal Despatch": ["Coal shortage", "Tipper shortage", "Loader breakdown",
@@ -230,6 +239,22 @@
     function picked(name) {
       var r = form.querySelector("input[name=" + name + "]:checked");
       return r ? r.value : "";
+    }
+    // ---- live shift (India time). The shift is never chosen by hand; the database checks it again when saving.
+    var shownShift = "", shownDay = "", needsReview = false;   // needsReview: the shift changed while the form was open
+    function renderShift(i) {
+      shownShift = i.shift; shownDay = i.opDay;
+      document.getElementById("sb-shift").textContent = i.shift;
+      document.getElementById("sb-day").textContent = i.opDayLabel;
+      document.getElementById("sb-time").textContent = i.asOf;
+    }
+    function shiftChangedText(i) {
+      return "The shift changed to " + i.shift + " at " + i.shiftStart + " IST. Please review and submit again.";
+    }
+    function showShiftChanged(i) {
+      var n = document.getElementById("sb-note");
+      n.className = "sb-note changed";
+      n.textContent = shiftChangedText(i);
     }
     function show(kind, text) {
       msg.className = kind; msg.textContent = text;
@@ -261,8 +286,17 @@
 
     form.addEventListener("submit", async function (ev) {
       ev.preventDefault();
+      // The shift is worked out again now. If it changed while the form was open, stop once and say so.
+      var nowInfo = MineShiftClock.info(MineShiftClock.now());
+      if (needsReview || nowInfo.shift !== shownShift || nowInfo.opDay !== shownDay) {
+        needsReview = false;
+        renderShift(nowInfo);
+        showShiftChanged(nowInfo);
+        show("err", shiftChangedText(nowInfo));
+        return;
+      }
       var row = {
-        p_shift: picked("shift"),
+        p_shift: shownShift,
         p_location: document.getElementById("location").value,
         p_category: picked("category"),
         p_issue_type: issue.value,
@@ -283,8 +317,17 @@
         show("ok", "Exception recorded successfully.");
         form.reset();
         fillIssues();
+        renderShift(MineShiftClock.info(MineShiftClock.now()));
+        document.getElementById("sb-note").className = "sb-note";
+        document.getElementById("sb-note").textContent = "A new exception is recorded in the shift that is running when you press the button.";
       } catch (e) {
         var text = "Sorry, the exception could not be saved. Error: " + e.message;
+        if (/current shift is/i.test(e.message)) {          // the database clock says the shift is different: refresh and ask again
+          var ci = MineShiftClock.info(MineShiftClock.now());
+          renderShift(ci);
+          showShiftChanged(ci);
+          text = e.message;
+        }
         if (MineShift.isSessionError(e.message)) text += " Your sign-in may have ended. Please sign in again.";
         show("err", text);
       }
@@ -295,6 +338,14 @@
       var ctx = await MineShift.start("index");
       if (!ctx) return;
       if (MineShift.can("create", ctx.access)) {
+        await MineShiftClock.sync(MineShift.db);              // trusted time from the database (falls back to the device clock)
+        renderShift(MineShiftClock.info(MineShiftClock.now()));
+        MineShiftClock.watch(function (cur, old) {
+          renderShift(cur);
+          showShiftChanged(cur);
+          needsReview = true;                                  // the next press of the button only asks the user to check
+        });
+        setInterval(function () { document.getElementById("sb-time").textContent = MineShiftClock.info(MineShiftClock.now()).asOf; }, 20000);
         form.hidden = false;
       } else {
         document.getElementById("denied").hidden = false;

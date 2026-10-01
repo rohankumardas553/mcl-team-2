@@ -12,7 +12,7 @@
 - A tool with at most 4 pages: index.html (entry page), dashboard.html
   (dashboard: what needs action now), analytics.html (historical analytics and
   period comparison and forecast readiness for management) and login.html (sign in). The shared helper file auth.js and the
-  analytics code file analytics.js are not pages.
+  analytics code file analytics.js and the shift-time helper shiftclock.js are not pages.
 - Every record has location, priority (Low / Medium / High) and status
   (Open / In progress / Resolved), plus the columns in "Our tool" below.
 - The tool is now a role-based operational decision-support PROTOTYPE with
@@ -65,7 +65,10 @@
   07-lockdown.sql (final security lockdown) and 07-rollback.sql (EMERGENCY ONLY
   - it re-opens public access), then 08-management-reopen.sql (higher
   authorities may reopen; for a database that already ran 04 and 07) with
-  08-management-reopen-rollback.sql to undo it. See "Final lockdown" below.
+  08-management-reopen-rollback.sql to undo it, then 10-ist-shift-control.sql
+  (new exceptions must be in the shift running now in India time; for a database
+  that already ran 04 and 07) with 10-ist-shift-control-rollback.sql to undo it.
+  See "Final lockdown" below.
 - Tables (all in the public schema): shift_exceptions (the records),
   profiles (who each login account is and its role), exception_remarks
   (remarks) and exception_audit (history). Every table has
@@ -401,6 +404,42 @@
   Management Review list and the comparison parts are hidden for All time as before.
   dashboard.html stays the operational "what needs action now" page.
 
+## IST shifts and Operational Day (shiftclock.js, 10-ist-shift-control.sql)
+- SHIFTS (fixed, India time, IANA zone Asia/Kolkata, UTC+05:30): First 05:00 (inclusive)
+  to 13:00 (exclusive); Second 13:00 to 21:00; Night 21:00 to 05:00 the next morning.
+  Stored values stay First / Second / Night. The device timezone is never used.
+- OPERATIONAL DAY: 05:00 IST on date D to 04:59:59 IST on D+1. At 02 Oct 02:00 IST the
+  shift is Night and the Operational Day is 01 Oct. 05:00 IST starts a new day (First).
+  It is NOT stored: it is worked out from created_at (IST date of created_at minus 5
+  hours), so no column or backfill is needed and no old record is changed.
+- ONE DEFINITION: shiftclock.js (pages) and ist_shift() / ist_operational_date() (database)
+  must always agree. The pages ask the database for its clock once (shift_clock()) and
+  fall back to the device clock if that fails. Pages re-check every 15 s, so a page left
+  open changes shift at 05:00 / 13:00 / 21:00 without a reload.
+- NEW EXCEPTIONS: the shift is shown (read-only) as Current Shift, Operational Day and
+  time in IST and is never chosen by hand. create_exception (after 10) rejects any shift
+  other than the one running on the DATABASE clock ("The current shift is Second (since
+  13:00 IST), not Night. Please review and submit again."), for every role, with no
+  bypass. If the shift changes while the form is open, the first press of the button
+  only refreshes the shift and asks the user to review; the second press saves.
+- OTHER ACTIONS: Start, remarks, priority change, closure request, decline, resolve,
+  reopen and management remarks have NO time rule. Old exceptions stay actionable.
+- DASHBOARD: a bar shows Operational Day, Current Shift and "As of ... IST". Default
+  view "Live" = every unresolved exception (carried forward from earlier days stays
+  visible, labelled "Carried forward from <day>, <shift> shift") + the current Operational
+  Day's resolved records whose shift has started. "All days" = everything. "One
+  operational day" = that day only (never a future day). Shift choices not yet started on
+  the current Operational Day are disabled ("Night - available from 21:00 IST"), never shown
+  as zero; completed days allow all shifts. Cards, Top 3, chart and OVERDUE keep their
+  definitions (they work on unresolved exceptions). Times are shown in IST.
+- ANALYTICS: calculations, filters and periods are unchanged (periods still use the
+  browser's calendar days). When the period reaches today a note says the current
+  operational day is included only up to the as-of time. No shift is disabled there.
+- KNOWN LIMITATIONS: some fictional demo rows (09) have a shift label that does not match
+  their IST created_at (about 15%); they are left as they are. Analytics periods use the
+  browser calendar day, not the Operational Day. There is no historical-entry path
+  (backdating) for any role; propose one separately if it is ever needed.
+
 ## Wording conventions on the Analytics page (presentation only)
 - Audience: a management presentation. Sentences must read naturally, say each
   thing once, and never sound like program output. This is wording only: the
@@ -521,3 +560,4 @@
 - Phase E forecast readiness (Claude): extended analytics.html and analytics.js (no new page, no SQL, no grant, no function, no extra database request, no change to auth.js, the lockdown, maker-checker, reopen authority or priority rules). New "Forecast Readiness" section: Not Ready / Limited / Ready for Exception Count, Impact Minutes, Time-to-Start and Time-to-Resolve forecasts, each with written factual reasons, plus an overall state, Readiness Notes, Historical Coverage, Data Concentration and Recurrence Coverage. Prototype engineering thresholds (data sufficiency, not operational or statistical) are shown on the page and listed above. Ready does not mean statistically validated, accurate or reliable. Reusable gate for a later phase: MineAnalytics.assessReadiness and isReady. NO forecasting, no scores and no AI recommendations yet. Known limitation: multiple lifecycle cycles are not reconstructed. Tested against a scratch local Postgres copy with 2,326 demo rows and hand-built boundary datasets; not tested on the live Supabase.
 - Analytics language and readability pass (Claude): wording and layout of the text on analytics.html only (analytics.js and analytics.html). No calculation, sort order, threshold, readiness state, filter, query, permission, SQL or other page changed. Natural comparison sentences (period named once above the list), one set of terms for the time measures, shorter readiness cards (evidence plus a reason only when Limited or Not Ready), one shared lifecycle note, clearer overall readiness text, consistent labels in Historical Coverage, Data Concentration and Recurrence Coverage, grammatical threshold text, plain empty and no-comparison messages, consistent dates and numbers. Tested on the fictional presentation data in a scratch copy; not tested on the live Supabase.
 - Management Overview restructure (Claude): analytics.html, analytics.js and CLAUDE.md only. The page now opens as a "Management Overview" (6 cards with one-line comparisons, Management Summary, two trend charts, top 5 impact locations and recurring issues, 5 review items, plain-language data availability for forecasting) with everything else kept under "View Detailed Analysis" and, inside it, "Methodology & Data Details". No calculation, threshold, readiness state, filter, query, permission, SQL or other page changed. Tested against a scratch local Postgres copy with the 09 presentation demo data (814 rows); not tested on the live Supabase.
+- IST shift control (Claude): new shiftclock.js (one definition of IST time, shift and Operational Day), database/10-ist-shift-control.sql with 10-ist-shift-control-rollback.sql (create_exception now checks the shift against the database clock; helper functions; shift_clock()), index.html (shift shown read-only, automatic, re-checked at submit), dashboard.html (Operational Day / Current Shift / As of bar, Live / All days / One operational day, future shifts disabled, carried-forward label, IST times, auto-update at shift change), analytics.html and analytics.js (partial-day note only; no calculation change). Roles, maker-checker, lifecycle actions, KPI / Top 3 / OVERDUE / chart definitions and all analytics calculations are unchanged. Tested against a scratch local Postgres copy with a simulated clock; not tested on the live Supabase. Data Keeper: run 10-ist-shift-control.sql after merge, then re-run the 07 verification query.
