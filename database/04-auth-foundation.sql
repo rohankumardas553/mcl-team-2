@@ -7,6 +7,10 @@
 --   * the old open access rules are NOT changed here (that is 07-lockdown.sql, later),
 --     so the live website keeps working exactly as before after you run this.
 --
+-- !! AFTER 07-lockdown.sql HAS BEEN RUN, DO NOT RE-RUN THIS WHOLE FILE. !!
+--    Re-running it re-opens internal helper functions to signed-in users (it re-grants what 07 hid).
+--    To link new accounts later, run ONLY 04b-link-accounts.sql.
+--
 -- Run this whole file in the Supabase SQL Editor, in one go.
 -- Take a CSV backup of shift_exceptions first (Table Editor > shift_exceptions > Export).
 
@@ -339,6 +343,56 @@ returns boolean language sql immutable as $$
 $$;
 
 -- CREATE: Overman / Supervisor and Shift In-Charge only.
+-- IST shift control (also in 10-ist-shift-control.sql, which upgrades a database that was set up before it).
+-- A new exception must be in the shift running now on the DATABASE clock (India time).
+-- Keeping it here means a fresh setup, or a re-run of this file, can never bring back the old behaviour.
+-- The one definition of the current shift (IST). Pure: the time is passed in.
+create or replace function public.ist_shift(p_ts timestamptz)
+returns text language sql immutable set search_path = public, pg_temp as $$
+  select case
+    when (p_ts at time zone 'Asia/Kolkata')::time >= time '05:00'
+     and (p_ts at time zone 'Asia/Kolkata')::time <  time '13:00' then 'First'
+    when (p_ts at time zone 'Asia/Kolkata')::time >= time '13:00'
+     and (p_ts at time zone 'Asia/Kolkata')::time <  time '21:00' then 'Second'
+    else 'Night'
+  end
+$$;
+
+-- Operational Day: the IST date of (time minus 5 hours). 02 Oct 02:30 IST -> 01 Oct.
+create or replace function public.ist_operational_date(p_ts timestamptz)
+returns date language sql immutable set search_path = public, pg_temp as $$
+  select ((p_ts at time zone 'Asia/Kolkata') - interval '5 hours')::date
+$$;
+
+-- Start time (IST wall clock, as text) of a shift, used only in messages.
+create or replace function public._shift_start_text(p_shift text)
+returns text language sql immutable set search_path = public, pg_temp as $$
+  select case p_shift when 'First' then '05:00' when 'Second' then '13:00' else '21:00' end
+$$;
+
+-- The check used by create_exception. The time is a parameter so that every
+-- boundary can be tested; create_exception always passes now().
+create or replace function public._check_live_shift(p_shift text, p_ts timestamptz)
+returns void language plpgsql set search_path = public, pg_temp as $$
+declare v_now text := public.ist_shift(p_ts);
+begin
+  if p_shift is distinct from v_now then
+    raise exception 'The current shift is % (since % IST), not %. Please review and submit again.',
+      v_now, public._shift_start_text(v_now), coalesce(p_shift, 'none');
+  end if;
+end
+$$;
+
+-- Trusted server clock for the pages (they only show it and correct a wrong device clock).
+create or replace function public.shift_clock()
+returns jsonb language sql stable security definer set search_path = public, pg_temp as $$
+  select jsonb_build_object(
+    'now', now(),
+    'shift', public.ist_shift(now()),
+    'operational_date', public.ist_operational_date(now()))
+$$;
+
+-- create_exception: identical to the version in 04, plus the live shift check.
 create or replace function public.create_exception(
   p_shift text, p_location text, p_category text, p_issue_type text,
   p_description text, p_impact_minutes integer, p_priority text)
@@ -350,6 +404,7 @@ begin
     raise exception 'Only an Overman / Supervisor or a Shift In-Charge can create an exception.';
   end if;
   if p_shift not in ('First', 'Second', 'Night') then raise exception 'Please choose a valid shift.'; end if;
+  perform public._check_live_shift(p_shift, now());
   if p_location not in ('ABC Patch','XYZ Patch','Haul Road A','Haul Road B',
                         'MDP Junction','Stockyard 1','Siding 1','Siding 2') then
     raise exception 'Please choose a valid location.'; end if;
@@ -375,6 +430,7 @@ begin
   return v_id;
 end
 $$;
+
 
 -- START: Overman / Supervisor, Shift In-Charge, Manager only when can_operate.
 create or replace function public.start_exception(p_id uuid)
@@ -665,6 +721,14 @@ grant execute on function public.resolve_exception(uuid, text)       to authenti
 grant execute on function public.reopen_exception(uuid, text)        to authenticated;
 grant execute on function public.change_priority(uuid, text, text)   to authenticated;
 grant execute on function public.add_remark(uuid, text, text)        to authenticated;
+
+-- IST shift control helpers: internal (not callable from the browser); shift_clock() is read-only time for signed-in users.
+revoke all on function public.ist_shift(timestamptz)               from public, anon, authenticated;
+revoke all on function public.ist_operational_date(timestamptz)    from public, anon, authenticated;
+revoke all on function public._shift_start_text(text)              from public, anon, authenticated;
+revoke all on function public._check_live_shift(text, timestamptz) from public, anon, authenticated;
+revoke all on function public.shift_clock()                        from public, anon;
+grant  execute on function public.shift_clock()                    to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 9. Link the 8 FICTIONAL test accounts to their roles.

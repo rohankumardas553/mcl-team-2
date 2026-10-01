@@ -73,6 +73,15 @@
 
     .col { min-width: 0; }
     .chartbox { position: relative; height: 300px; }
+    .clockbar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0 0 12px; padding: 10px 14px;
+                background: #fff; border: 1px solid var(--line); border-left: 6px solid #f59e0b; border-radius: 12px; font-size: 15px; }
+    .clockbar b { color: var(--navy); }
+    .clockbar .cb-shift { display: inline-block; padding: 2px 12px; border-radius: 999px; background: var(--navy); color: #fff; font-weight: 800; }
+    .clockbar .cb-pending { flex: 1 1 100%; color: #7c2d12; font-weight: 700; }
+    .badge.carry { display: block; width: fit-content; max-width: 100%; margin-top: 6px; white-space: normal; background: #fff7ed; color: #9a3412; border: 2px solid #f59e0b; }
+    .filters #f-date-wrap { grid-column: 1 / -1; }
+    .filters input[type=date] { width: 100%; font: inherit; padding: 12px; min-height: 56px; color: var(--ink);
+             border: 2px solid var(--line); border-radius: 12px; background: #fff; }
     .summary { margin: 14px 0 0; font-weight: 700; color: #33466b; }
 
     /* Exception cards */
@@ -193,17 +202,29 @@
     </div>
     <div id="msg" role="status"></div>
 
+    <div class="clockbar" id="clockbar" aria-live="polite">
+      <span><b>Operational Day:</b> <span id="cb-day">&ndash;</span></span>
+      <span><b>Current Shift:</b> <span class="cb-shift" id="cb-shift">&ndash;</span></span>
+      <span><b>As of:</b> <span id="cb-asof">&ndash;</span></span>
+      <span id="cb-pending" class="cb-pending" hidden>The shift changed. The list will refresh when you close the form you are filling in.</span>
+    </div>
+
     <div class="tabs" id="tabs" hidden>
       <button type="button" id="tab-active" aria-pressed="true">Active exceptions</button>
       <button type="button" id="tab-history" aria-pressed="false">My history</button>
     </div>
 
     <div class="filters" id="filters">
+      <div id="f-day-wrap" hidden><label for="f-day">Day</label><select id="f-day">
+        <option value="live">Live (today + unresolved)</option>
+        <option value="all">All days</option>
+        <option value="day">One operational day</option></select></div>
+      <div id="f-date-wrap" hidden><label for="f-date">Operational day</label><input type="date" id="f-date"></div>
       <div><label for="f-cat">Category</label><select id="f-cat">
         <option>All</option><option>Coal Despatch</option><option>Dust Suppression</option>
         <option>Haul Road</option><option>Coal Quality</option></select></div>
       <div><label for="f-shift">Shift</label><select id="f-shift">
-        <option>All</option><option>First</option><option>Second</option><option>Night</option></select></div>
+        <option value="All">All</option><option value="First">First</option><option value="Second">Second</option><option value="Night">Night</option></select></div>
       <div><label for="f-loc">Location</label><select id="f-loc">
         <option>All</option><option>ABC Patch</option><option>XYZ Patch</option>
         <option>Haul Road A</option><option>Haul Road B</option><option>MDP Junction</option>
@@ -246,6 +267,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="config.js"></script>
   <script src="auth.js"></script>
+  <script src="shiftclock.js"></script>
   <script>
     var msg = document.getElementById("msg");
     function fail(text) { msg.className = "err"; msg.textContent = text; }
@@ -256,10 +278,10 @@
       if (text !== undefined && text !== null) e.textContent = text;
       return e;
     }
+    // All times on this page are India time (IST), whatever the device timezone is.
     function fmtTime(iso) {
       if (!iso) return "";
-      var d = new Date(iso);
-      return d.toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+      return MineShiftClock.fmt(iso);
     }
     var ROLE_RANK = { overman: 1, shift_incharge: 2, manager: 3, project_officer: 4, general_manager: 5 };
     function roleLabel(r) { var x = MineShift.ROLES[r]; return x ? x.label : (r || "unknown"); }
@@ -280,7 +302,7 @@
     // OVERDUE: current priority High, not Resolved, created more than 30 minutes ago.
     function isOverdue(r) {
       return r.current_priority === "High" && r.status !== "Resolved" &&
-             (Date.now() - new Date(r.created_at).getTime()) > 30 * 60 * 1000;
+             (MineShiftClock.now() - new Date(r.created_at).getTime()) > 30 * 60 * 1000;
     }
     function closurePending(r) { return r.status === "In progress" && !!r.closure_requested_at; }
     // Maker-checker: the person who asked for the closure cannot confirm or decline it.
@@ -327,7 +349,9 @@
       var cat = document.getElementById("f-cat").value;
       var shift = document.getElementById("f-shift").value;
       var loc = document.getElementById("f-loc").value;
+      var scope = dayScope();
       return allRows.filter(function (r) {
+        if (!inScope(r, scope)) return false;
         if (!isManagement()) {
           // Overman: active exceptions, or the Resolved ones he created (My history).
           if (view === "active" && r.status === "Resolved") return false;
@@ -337,6 +361,77 @@
                (shift === "All" || r.shift === shift) &&
                (loc === "All" || r.location === loc);
       });
+    }
+
+    // ---------------------------------------------------------------- India time: Operational Day and shifts
+    // Live view = every unresolved exception (carried forward from earlier days stays visible and actionable)
+    //             + exceptions of the CURRENT Operational Day whose shift has already started.
+    // One operational day = that day's records only (all statuses). All days = everything, as before.
+    var clockInfo = null;
+    function nowInfo() { clockInfo = MineShiftClock.info(MineShiftClock.now()); return clockInfo; }
+
+    function dayScope() {
+      if (!isManagement()) return { mode: "all" };                // Overman: his lists are unresolved work or his own history; no day filter
+      var mode = document.getElementById("f-day").value;
+      if (mode === "day") {
+        var d = document.getElementById("f-date").value;
+        var cur = clockInfo.opDay;
+        if (!d) d = cur;
+        if (d > cur) d = cur;                                      // never a future operational day
+        return { mode: "day", day: d };
+      }
+      return { mode: mode };
+    }
+    // A row of the CURRENT Operational Day whose shift has not started yet (only possible with old or inconsistent data,
+    // because the database now refuses such new entries). It is never shown, in any view, until that shift starts.
+    // Rows of earlier operational days are never hidden by this rule, so unresolved carry-forward work stays visible.
+    function isFutureShiftOfToday(r) {
+      if (MineShiftClock.opDayOfRow(r.created_at) !== clockInfo.opDay) return false;
+      var a = MineShiftClock.availability(clockInfo, clockInfo.opDay)[r.shift];
+      return !!a && !a.available;
+    }
+    function inScope(r, sc) {
+      if (isFutureShiftOfToday(r)) return false;                   // applies to Live, All days and One operational day
+      if (sc.mode === "all") return true;
+      var od = MineShiftClock.opDayOfRow(r.created_at);
+      if (sc.mode === "day") return od === sc.day;
+      // live: unresolved work from any day (carry-forward) + the current Operational Day's resolved records
+      return r.status !== "Resolved" || od === clockInfo.opDay;
+    }
+    // Shift availability for the day being looked at: future shifts of the current Operational Day are disabled
+    // (never shown as zero); completed days and "All days" allow every shift.
+    function shiftDayKey() {
+      var sc = dayScope();
+      if (!isManagement()) return view === "active" ? clockInfo.opDay : null;   // Overman: active work follows the live shift
+      if (sc.mode === "live") return clockInfo.opDay;
+      if (sc.mode === "day") return sc.day;
+      return null;
+    }
+    function updateShiftOptions() {
+      var sel = document.getElementById("f-shift");
+      var dayKey = shiftDayKey();
+      var av = dayKey ? MineShiftClock.availability(clockInfo, dayKey) : null;
+      Array.prototype.forEach.call(sel.options, function (o) {
+        if (o.value === "All") { o.textContent = av ? "All available shifts" : "All"; return; }
+        var ok = !av || av[o.value].available;
+        o.disabled = !ok;
+        o.textContent = ok ? o.value : o.value + " - available from " + av[o.value].from;
+      });
+      if (sel.value !== "All" && sel.options[sel.selectedIndex].disabled) sel.value = "All";
+    }
+    function renderClock() {
+      var i = nowInfo();
+      document.getElementById("cb-day").textContent = i.opDayLabel;
+      document.getElementById("cb-shift").textContent = i.shift;
+      document.getElementById("cb-asof").textContent = i.asOf;
+      var dp = document.getElementById("f-date");
+      dp.max = i.opDay;
+      if (dp.value > i.opDay) dp.value = i.opDay;
+    }
+    function carryLabel(r) {
+      if (r.status === "Resolved") return "";
+      var od = MineShiftClock.opDayOfRow(r.created_at);
+      return od < clockInfo.opDay ? "Carried forward from " + MineShiftClock.labelOfKey(od) + ", " + r.shift + " shift" : "";
     }
 
     // ---------------------------------------------------------------- analytics (Shift In-Charge and above)
@@ -394,6 +489,8 @@
         head.appendChild(badges);
         item.appendChild(head);
         item.appendChild(el("div", "meta", r.location + " | " + r.impact_minutes + " min | " + r.status));
+        var carriedTop = carryLabel(r);
+        if (carriedTop) item.appendChild(el("div", "meta", carriedTop));
         item.appendChild(el("div", "reason", r.current_priority + " priority · " + r.impact_minutes + " min impact"));
         box.appendChild(item);
       });
@@ -447,6 +544,7 @@
       try {
         var res = await MineShift.db.rpc(fn, args);
         if (res.error) throw new Error(res.error.message);
+        if (window.__clearPendingRefresh) window.__clearPendingRefresh();
         await loadAll();
         renderView();
         toast("ok", okText);
@@ -698,6 +796,8 @@
       badges.appendChild(el("span", "badge st-" + r.status.split(" ")[0], r.status));
       top.appendChild(badges);
       item.appendChild(top);
+      var carried = carryLabel(r);
+      if (carried) item.appendChild(el("span", "badge carry", carried));
       item.appendChild(el("div", "meta", fmtTime(r.created_at) + " | " + r.shift + " shift | " + r.location + " | " + r.impact_minutes + " min"));
       item.appendChild(el("div", "line", "Reported by " + (r.created_by_name ? r.created_by_name + " (" + roleLabel(r.created_by_role) + ")" : "an earlier record (before login)") +
         " · " + fmtTime(r.created_at)));
@@ -738,7 +838,16 @@
     }
 
     function renderView() {
+      updateShiftOptions();
       var rows = filtered();
+      if (isManagement()) {
+        var sc = dayScope(), sm = document.getElementById("summary");
+        var carry = rows.filter(function (r) { return carryLabel(r); }).length;
+        sm.hidden = false;
+        sm.textContent = (sc.mode === "live" ? "Live view: " : sc.mode === "all" ? "All days: " : "Operational Day " + MineShiftClock.labelOfKey(sc.day) + ": ") +
+          rows.length + " exception" + (rows.length === 1 ? "" : "s") +
+          (carry ? ", including " + carry + " unresolved from earlier days" : "");
+      }
       if (isManagement()) {
         renderCards(rows);
         renderTop3(rows);
@@ -756,13 +865,17 @@
       renderView();
     }
 
+    function syncDay() { document.getElementById("f-date-wrap").hidden = document.getElementById("f-day").value !== "day"; }
     document.getElementById("f-reset").addEventListener("click", function () {
       ["f-cat", "f-shift", "f-loc"].forEach(function (id) { document.getElementById(id).value = "All"; });
+      document.getElementById("f-day").value = "live"; document.getElementById("f-date").value = "";
+      syncDay();
       renderView();
     });
-    ["f-cat", "f-shift", "f-loc"].forEach(function (id) {
+    ["f-cat", "f-shift", "f-loc", "f-day", "f-date"].forEach(function (id) {
       document.getElementById(id).addEventListener("change", renderView);
     });
+    document.getElementById("f-day").addEventListener("change", syncDay);
     document.getElementById("tab-active").addEventListener("click", function () { setView("active"); });
     document.getElementById("tab-history").addEventListener("click", function () { setView("history"); });
 
@@ -771,6 +884,9 @@
       if (!ctx) return;
       access = ctx.access;
       myId = ctx.session.user.id;
+      await MineShiftClock.sync(MineShift.db);                      // trusted time from the database (falls back to the device clock)
+      renderClock();
+      if (isManagement()) document.getElementById("f-day-wrap").hidden = false;
 
       var layout = document.getElementById("layout");
       if (isManagement()) {
@@ -788,6 +904,29 @@
           "Your active exceptions. Start work, add remarks and request closure when the job is done.";
         document.getElementById("list-title").textContent = "Active exceptions";
       }
+      // Left open across a shift change (05:00, 13:00, 21:00 IST): update the clock, the available shifts and the data.
+      setInterval(renderClock, 20000);
+      // A shift change must never wipe what someone is typing. While an inline action form (Request closure, Resolve,
+      // Decline, Reopen, Change priority, remark) is open, only the clock and the shift choices are updated; the data
+      // refresh is kept pending and runs as soon as the form is closed, cancelled or saved.
+      var pendingRefresh = false;
+      function actionFormOpen() { return !!document.querySelector("#list .formbox"); }
+      function showPending(on) { document.getElementById("cb-pending").hidden = !on; }
+      async function refreshWhenIdle() {
+        if (actionFormOpen()) { pendingRefresh = true; showPending(true); return; }
+        pendingRefresh = false; showPending(false);
+        try { await loadAll(); } catch (e) { /* keep the old rows; the next change or refresh will try again */ }
+        renderView();
+      }
+      window.__pendingRefresh = function () { return pendingRefresh; };           // read by the tests
+      window.__clearPendingRefresh = function () { pendingRefresh = false; showPending(false); };   // a save reloads the data itself
+      new MutationObserver(function () { if (pendingRefresh && !actionFormOpen()) refreshWhenIdle(); })
+        .observe(document.getElementById("list"), { childList: true, subtree: true });
+      MineShiftClock.watch(function () {
+        renderClock();
+        updateShiftOptions();                                        // choices follow the new shift at once
+        refreshWhenIdle();
+      });
       try {
         await loadAll();
         renderView();

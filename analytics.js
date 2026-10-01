@@ -1453,6 +1453,7 @@
       var result = await load(f);
       if (token !== loadToken) return;          // a newer filter change is already running
       draw(result);
+      drawPartialNote(f.range);
       $("loading").hidden = true;
       $("content").hidden = false;
       $("content").classList.remove("busy");
@@ -1464,6 +1465,19 @@
       if (MineShift.isSessionError(e.message)) text += " Your sign-in may have ended. Please sign in again.";
       showError(text);
     }
+  }
+
+  // The present operational day is still in progress. When the period reaches the present moment, say so (nothing is
+  // calculated differently and no shift is excluded). The time and shift come from the India-time helper.
+  function drawPartialNote(range) {
+    var n = $("partial-note");
+    var i = window.MineShiftClock ? MineShiftClock.info(MineShiftClock.now()) : null;
+    // range.to is exclusive; an open end (Last N days, All time) reaches the present.
+    var reachesNow = i && (!range.to || range.to.getTime() > i.ms);
+    n.hidden = !reachesNow;
+    n.textContent = reachesNow
+      ? "Current-period data may be incomplete because the present operational day is still in progress. As of " + i.asOf + " (" + i.shift + " shift)."
+      : "";
   }
 
   function syncCustom() { $("custom-dates").hidden = $("f-range").value !== "custom"; }
