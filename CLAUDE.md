@@ -9,7 +9,7 @@
   time. The Progress Log at the end of this file is our handover logbook.
 
 ## What we are building
-- A tool with at most 4 pages: index.html (entry page), dashboard.html
+- A tool with at most 4 pages (plus accountadmin.html, the Data Keeper page, added in the presentation sprint): index.html (entry page), dashboard.html
   (dashboard: what needs action now), analytics.html (historical analytics and
   period comparison and forecast readiness for management) and login.html (sign in). The shared helper file auth.js and the
   analytics code file analytics.js and the shift-time helper shiftclock.js are not pages.
@@ -539,7 +539,7 @@
   not the address has an account; one request per 60 seconds per page). The link returns to login.html, which asks for a
   new password (8+ characters). The Supabase Auth "Redirect URLs" list must contain the site's login.html address.
 - DATA KEEPER (accountadmin.js, database/13-account-admin.sql): NOT a new role. profiles.can_administer (yes / no, default
-  no, set only in the SQL Editor) lets that account see an "Account administration" panel at the bottom of dashboard.html:
+  no, set only in the SQL Editor) lets that account see an "Account administration" menu link (shown on the Dashboard) that opens accountadmin.html. The page needs a sign-in, asks the database (my_admin()) and shows "Not authorised" to everybody else, with no data requested. It can:
   list accounts, "Send password reset" (the database logs the request and returns the account e-mail; the browser then asks
   Supabase to send the standard reset e-mail; nobody can choose or see another person's password), and Switch off / on
   (profiles.active; never your own account). Every action is written to account_admin_log (append-only, no browser
@@ -621,7 +621,7 @@
 - Problem: Shift problems in Coal Despatch and Dust Suppression are not recorded in one place.
 - Who records / who decides: Shift staff record; shift managers decide (to confirm).
 - Table name and columns: shift_exceptions - id, created_at, shift, location, category, issue_type, description, impact_minutes, urgency, status, resolved_at, plus (from 04) created_by, created_by_role, reported_priority, current_priority, priority_changed_by, priority_changed_by_role, priority_changed_at, priority_change_reason, started_by, started_at, closure_requested_by, closure_requested_at, resolved_by, updated_at, and name snapshots created_by_name, priority_changed_by_name, started_by_name, closure_requested_by_name, resolved_by_name. Other tables: profiles, exception_remarks, exception_audit.
-- Pages: index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics, period-to-period comparison and forecast readiness (Shift In-Charge and above); login.html = sign in (helper: auth.js)
+- Pages: accountadmin.html = Data Keeper account administration (can_administer only; logic in accountadmin.js); index.html = entry page (Overman and Shift In-Charge only); dashboard.html = role-aware dashboard; analytics.html (+ analytics.js) = historical analytics, period-to-period comparison and forecast readiness (Shift In-Charge and above); login.html = sign in (helper: auth.js)
 
 ## Progress Log (newest entry at the bottom)
 - Phase 0 (starter): placeholder index.html, config.js without settings and

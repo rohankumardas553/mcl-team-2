@@ -1129,9 +1129,9 @@
         updateShiftOptions();                                        // choices follow the new shift at once
         refreshWhenIdle();
       });
-      // Data Keeper only: the Account administration panel (the database decides; everybody else sees nothing).
+      // Data Keeper only: a menu link to accountadmin.html (the database decides; everybody else sees nothing).
       MineAccounts.isAdmin().then(function (yes) {
-        if (yes) MineAccounts.mount(document.querySelector("main"), myId);
+        if (yes) MineAccounts.navLink(null);                         // the Data Keeper page is accountadmin.html
       });
       try {
         await loadAll();

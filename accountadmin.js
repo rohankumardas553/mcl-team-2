@@ -49,7 +49,8 @@
     } catch (e) { return false; }
   }
 
-  function mount(host, ownId) {
+  // opts.open = true: show the list at once (used by accountadmin.html).
+  function mount(host, ownId, opts) {
     var panel = el("details", ""); panel.id = "admin-panel";
     panel.appendChild(el("summary", "", "Account administration (Data Keeper)"));
     var body = el("div", "ad-body");
@@ -126,8 +127,20 @@
     }
 
     panel.addEventListener("toggle", function () { if (panel.open && !panel.__loaded) { panel.__loaded = true; load(); } });
+    if (opts && opts.open) panel.open = true;
     return panel;
   }
 
-  window.MineAccounts = { isAdmin: isAdmin, mount: mount };
+  // Adds "Account administration" to the shared menu (call after MineShift.start, and only for an administrator).
+  function navLink(activeId) {
+    var nav = document.getElementById("nav");
+    if (!nav || nav.querySelector("a[href='accountadmin.html']")) return;
+    var a = document.createElement("a");
+    a.href = "accountadmin.html";
+    a.textContent = "Account administration";
+    if (activeId === "accountadmin") a.className = "active";
+    nav.appendChild(a);
+  }
+
+  window.MineAccounts = { isAdmin: isAdmin, mount: mount, navLink: navLink };
 })();
