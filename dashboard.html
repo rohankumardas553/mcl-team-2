@@ -78,6 +78,25 @@
     .clockbar b { color: var(--navy); }
     .clockbar .cb-shift { display: inline-block; padding: 2px 12px; border-radius: 999px; background: var(--navy); color: #fff; font-weight: 800; }
     .clockbar .cb-pending { flex: 1 1 100%; color: #7c2d12; font-weight: 700; }
+    .handover { margin: 0 0 14px; padding: 14px; }
+    .handover h2 { margin: 0 0 4px; }
+    .ho-sub { margin: 0 0 10px; font-size: 15px; color: #33466b; }
+    .ho-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+    .ho-chip { background: #f8fafd; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font-size: 14px; color: #33466b; line-height: 1.2; }
+    .ho-chip b { display: block; font-size: 24px; color: var(--ink); }
+    .ho-chip.hot b { color: #b91c1c; }
+    .ho-chip.wait b { color: #9a3412; }
+    .ho-list { list-style: none; margin: 0; padding: 0; }
+    .ho-list li { padding: 10px 0; border-top: 1px solid #e3e9f4; }
+    .ho-list .t { font-weight: 700; }
+    .ho-list .m { font-size: 14px; color: #33466b; margin-top: 2px; }
+    .ho-none { color: #4b5d80; font-size: 15px; margin: 4px 0 8px; }
+    .handover details { margin-top: 10px; border-top: 1px solid #e3e9f4; padding-top: 6px; }
+    .handover summary { cursor: pointer; font-weight: 700; color: var(--navy); min-height: 48px; display: flex; align-items: center; }
+    .handover h3 { font-size: 15px; margin: 12px 0 4px; color: var(--navy); }
+    .age { font-weight: 700; color: #33466b; }
+    .pill.wait { background: #fff7ed; color: #9a3412; border: 2px solid #f59e0b; font-weight: 700; }
+    .impact-note { margin: 8px 0 0; font-size: 13px; color: #4b5d80; }
     .badge.carry { display: block; width: fit-content; max-width: 100%; margin-top: 6px; white-space: normal; background: #fff7ed; color: #9a3412; border: 2px solid #f59e0b; }
     .filters #f-date-wrap { grid-column: 1 / -1; }
     .filters input[type=date] { width: 100%; font: inherit; padding: 12px; min-height: 56px; color: var(--ink);
@@ -209,6 +228,14 @@
       <span id="cb-pending" class="cb-pending" hidden>The shift changed. The list will refresh when you close the form you are filling in.</span>
     </div>
 
+    <section class="panel handover" id="handover" hidden aria-label="Shift handover">
+      <h2>Shift Handover</h2>
+      <p class="ho-sub" id="ho-sub"></p>
+      <div class="ho-chips" id="ho-chips"></div>
+      <ol class="ho-list" id="ho-list"></ol>
+      <details id="ho-details"><summary>View handover details</summary><div id="ho-detail-body"></div></details>
+    </section>
+
     <div class="tabs" id="tabs" hidden>
       <button type="button" id="tab-active" aria-pressed="true">Active exceptions</button>
       <button type="button" id="tab-history" aria-pressed="false">My history</button>
@@ -237,6 +264,7 @@
       <div class="card high"><div class="n" id="k-high">-</div><div class="t">High Priority</div></div>
       <div class="card"><div class="n" id="k-min">-</div><div class="t">Active Impact Minutes</div></div>
     </div>
+    <p class="impact-note" id="impact-note" hidden>Impact minutes are the reporter's estimate of how many minutes of operations an exception affects, entered when it was reported.</p>
 
     <div class="layout two" id="layout">
       <div class="col" id="col-left" hidden>
@@ -293,7 +321,7 @@
       "resolved_by_name,resolved_at";
 
     var access = null, myId = null;
-    var allRows = [], remarksBy = {}, chart = null, view = "active";
+    var allRows = [], remarksBy = {}, chart = null, view = "active", reopenedRecent = [];
     var CATS = ["Coal Despatch", "Dust Suppression", "Haul Road", "Coal Quality"];
 
     function can(action) { return MineShift.can(action, access); }
@@ -337,6 +365,19 @@
           .order("created_at", { ascending: true }).order("id", { ascending: true });
       });
       allRows = ex;
+      // Reopened exceptions during the shift that just ended are only recorded in the audit trail. One small, time-limited
+      // read (Shift In-Charge and above can read it; an Overman cannot and does not see this item).
+      reopenedRecent = [];
+      if (can("view_all_history") && clockInfo) {
+        try {
+          var since = new Date(MineShiftClock.previousShift(clockInfo).startMs).toISOString();
+          reopenedRecent = await fetchAll(function () {
+            return MineShift.db.from("exception_audit").select("id,exception_id,actor_name,created_at")
+              .eq("action", "reopened").gte("created_at", since)
+              .order("created_at", { ascending: true }).order("id", { ascending: true });
+          });
+        } catch (e) { reopenedRecent = []; }
+      }
       remarksBy = {};
       rm.forEach(function (m) {
         // Overmen never see management remarks (the database also hides them).
@@ -428,10 +469,145 @@
       dp.max = i.opDay;
       if (dp.value > i.opDay) dp.value = i.opDay;
     }
-    function carryLabel(r) {
+    // Where an unresolved exception came from, in the fewest words that are still clear:
+    //   earlier shift of today          -> "From First shift"
+    //   an earlier Operational Day      -> "From Night shift · 30 Sep"
+    //   the current shift                -> nothing (the card already shows the time)
+    function originLabel(r) {
       if (r.status === "Resolved") return "";
       var od = MineShiftClock.opDayOfRow(r.created_at);
-      return od < clockInfo.opDay ? "Carried forward from " + MineShiftClock.labelOfKey(od) + ", " + r.shift + " shift" : "";
+      if (od < clockInfo.opDay) return "From " + r.shift + " shift \u00b7 " + MineShiftClock.shortLabelOfKey(od);
+      if (od === clockInfo.opDay && r.shift !== clockInfo.shift) return "From " + r.shift + " shift";
+      return "";
+    }
+    function fromEarlierDay(r) { return r.status !== "Resolved" && MineShiftClock.opDayOfRow(r.created_at) < clockInfo.opDay; }
+
+    // ---------------------------------------------------------------- ages (facts only; no new OVERDUE rules)
+    function ageSpan(prefix, sinceIso) {
+      var sp = el("span", "age", "");
+      sp.setAttribute("data-since", sinceIso);
+      sp.setAttribute("data-prefix", prefix);
+      sp.textContent = prefix + MineShiftClock.ageText(MineShiftClock.now() - new Date(sinceIso).getTime());
+      return sp;
+    }
+    // Open for ... / In progress for ... (an In progress item counts from when work started)
+    function activeAgeSpan(r) {
+      if (r.status === "In progress" && r.started_at) return ageSpan("In progress for ", r.started_at);
+      return ageSpan((r.status === "In progress" ? "In progress for " : "Open for "), r.created_at);
+    }
+    function refreshAges() {
+      Array.prototype.forEach.call(document.querySelectorAll("[data-since]"), function (sp) {
+        sp.textContent = sp.getAttribute("data-prefix") + MineShiftClock.ageText(MineShiftClock.now() - new Date(sp.getAttribute("data-since")).getTime());
+      });
+    }
+
+    // ---------------------------------------------------------------- Shift Handover (derived from rows already loaded)
+    // "What has the shift that just ended handed over to me?" Windows are Asia/Kolkata shift windows (Night = 21:00 to 05:00),
+    // never browser calendar days. Only the loaded rows are used; the one extra read is the reopened audit lines above.
+    function topOrder(a, b) {
+      return (priOrder(a.current_priority) - priOrder(b.current_priority)) || ((b.impact_minutes || 0) - (a.impact_minutes || 0)) ||
+             (new Date(a.created_at) - new Date(b.created_at));
+    }
+    function buildHandover() {
+      var ps = MineShiftClock.previousShift(clockInfo);
+      function inWin(iso) { if (!iso) return false; var t = Date.parse(iso); return t >= ps.startMs && t < ps.endMs; }
+      var seen = allRows.filter(function (r) { return !isFutureShiftOfToday(r); });
+      var open = seen.filter(function (r) { return r.status !== "Resolved"; });
+      var h = {
+        ps: ps, open: open,
+        high: open.filter(function (r) { return r.current_priority === "High"; }),
+        awaiting: open.filter(closurePending).sort(function (a, b) { return Date.parse(a.closure_requested_at) - Date.parse(b.closure_requested_at); }),
+        fromPrev: open.filter(function (r) { return inWin(r.created_at); }).sort(topOrder),
+        started: [], closureReq: [], resolved: [], priority: [], reopened: []
+      };
+      if (can("view_all_history")) {             // state changes need the full record set (not visible to an Overman)
+        seen.forEach(function (r) {
+          if (inWin(r.started_at)) h.started.push(r);
+          if (closurePending(r) && inWin(r.closure_requested_at)) h.closureReq.push(r);
+          if (r.status === "Resolved" && inWin(r.resolved_at)) h.resolved.push(r);
+          if (inWin(r.priority_changed_at)) h.priority.push(r);
+        });
+        var byId = {}; allRows.forEach(function (r) { byId[r.id] = r; });
+        var done = {};
+        reopenedRecent.forEach(function (a) {
+          if (!inWin(a.created_at) || done[a.exception_id] || !byId[a.exception_id]) return;
+          done[a.exception_id] = true; h.reopened.push({ row: byId[a.exception_id], at: a.created_at, who: a.actor_name });
+        });
+      }
+      // The short list: awaiting confirmation first (oldest request first), then High unresolved, then what the previous shift opened.
+      var pick = [], used = {};
+      function add(list) { list.forEach(function (r) { if (!used[r.id]) { used[r.id] = true; pick.push(r); } }); }
+      add(h.awaiting); add(h.high.slice().sort(topOrder)); add(h.fromPrev);
+      h.list = pick.slice(0, 5);
+      h.more = pick.length - h.list.length;
+      return h;
+    }
+    function hoChip(box, value, label, cls) {
+      var c = el("div", "ho-chip" + (cls ? " " + cls : ""));
+      c.appendChild(el("b", "", String(value)));
+      c.appendChild(document.createTextNode(label));
+      box.appendChild(c);
+    }
+    function hoItem(r) {
+      var li = el("li");
+      var t = el("div", "t", "");
+      t.appendChild(el("span", "badge " + r.current_priority, r.current_priority));
+      t.appendChild(document.createTextNode(" " + r.category + " - " + r.issue_type));
+      li.appendChild(t);
+      var m = el("div", "m", "");
+      m.appendChild(document.createTextNode(r.location + " \u00b7 "));
+      m.appendChild(activeAgeSpan(r));
+      if (closurePending(r)) { m.appendChild(document.createTextNode(" \u00b7 ")); m.appendChild(ageSpan("Awaiting confirmation \u00b7 ", r.closure_requested_at)); }
+      var o = originLabel(r);
+      if (o) m.appendChild(document.createTextNode(" \u00b7 " + o));
+      li.appendChild(m);
+      return li;
+    }
+    function hoSection(body, title, items, line) {
+      body.appendChild(el("h3", "", title + " (" + items.length + ")"));
+      if (!items.length) { body.appendChild(el("div", "ho-none", "None")); return; }
+      var ul = el("ul", "ho-list");
+      items.slice(0, 8).forEach(function (x) { ul.appendChild(line(x)); });
+      body.appendChild(ul);
+      if (items.length > 8) body.appendChild(el("div", "ho-none", "and " + (items.length - 8) + " more"));
+    }
+    function eventLine(verb, timeOf, whoOf) {
+      return function (r) {
+        var li = el("li"); var row = r.row || r;
+        li.appendChild(el("div", "t", verb + " \u00b7 " + row.category + " - " + row.issue_type));
+        var who = whoOf(r);
+        li.appendChild(el("div", "m", row.location + " \u00b7 " + fmtTime(timeOf(r)) + (who ? " \u00b7 " + who : "")));
+        return li;
+      };
+    }
+    function renderHandover() {
+      var box = document.getElementById("handover");
+      box.hidden = false;
+      var h = buildHandover(), ps = h.ps;
+      document.getElementById("ho-sub").textContent = "From " + ps.shift + " shift (" + MineShiftClock.shortLabelOfKey(ps.opDay) + ") to " + clockInfo.shift + " shift now";
+      var chips = document.getElementById("ho-chips"); chips.textContent = "";
+      hoChip(chips, h.open.length, "unresolved now");
+      hoChip(chips, h.high.length, "High priority", h.high.length ? "hot" : "");
+      hoChip(chips, h.awaiting.length, "awaiting confirmation", h.awaiting.length ? "wait" : "");
+      hoChip(chips, h.fromPrev.length, "opened in " + ps.shift + " shift, still open");
+      if (can("view_all_history")) hoChip(chips, h.reopened.length, "reopened in " + ps.shift + " shift");
+      var list = document.getElementById("ho-list"); list.textContent = "";
+      if (!h.list.length) list.appendChild(el("li", "ho-none", "Nothing unresolved to hand over."));
+      h.list.forEach(function (r) { list.appendChild(hoItem(r)); });
+      var body = document.getElementById("ho-detail-body"); body.textContent = "";
+      if (h.more > 0) body.appendChild(el("div", "ho-none", h.more + " more item" + (h.more === 1 ? "" : "s") + " need attention (awaiting confirmation, High priority or opened last shift). Use the list below."));
+      hoSection(body, "Awaiting confirmation", h.awaiting, hoItem);
+      hoSection(body, "Opened in " + ps.shift + " shift and still open", h.fromPrev, hoItem);
+      if (can("view_all_history")) {
+        body.appendChild(el("h3", "", "Changes during " + ps.shift + " shift (" + ps.opDayLabel + ")"));
+        body.appendChild(el("div", "ho-none", "Started " + h.started.length + " \u00b7 Closure requested " + h.closureReq.length + " \u00b7 Resolved " + h.resolved.length +
+          " \u00b7 Reopened " + h.reopened.length + " \u00b7 Priority changed " + h.priority.length));
+        hoSection(body, "Started", h.started, eventLine("Started", function (r) { return r.started_at; }, function (r) { return r.started_by_name; }));
+        hoSection(body, "Closure requested", h.closureReq, eventLine("Closure requested", function (r) { return r.closure_requested_at; }, function (r) { return r.closure_requested_by_name; }));
+        hoSection(body, "Resolved", h.resolved, eventLine("Resolved", function (r) { return r.resolved_at; }, function (r) { return r.resolved_by_name; }));
+        hoSection(body, "Reopened", h.reopened, eventLine("Reopened", function (x) { return x.at; }, function (x) { return x.who; }));
+        hoSection(body, "Priority changed", h.priority, eventLine("Priority changed", function (r) { return r.priority_changed_at; }, function (r) { return (r.priority_changed_by_name || "") + " to " + r.current_priority; }));
+      }
     }
 
     // ---------------------------------------------------------------- analytics (Shift In-Charge and above)
@@ -489,8 +665,12 @@
         head.appendChild(badges);
         item.appendChild(head);
         item.appendChild(el("div", "meta", r.location + " | " + r.impact_minutes + " min | " + r.status));
-        var carriedTop = carryLabel(r);
+        var carriedTop = originLabel(r);
         if (carriedTop) item.appendChild(el("div", "meta", carriedTop));
+        var ageLine = el("div", "meta", "");
+        ageLine.appendChild(activeAgeSpan(r));
+        if (closurePending(r)) { ageLine.appendChild(document.createTextNode(" \u00b7 ")); ageLine.appendChild(ageSpan("Awaiting confirmation \u00b7 ", r.closure_requested_at)); }
+        item.appendChild(ageLine);
         item.appendChild(el("div", "reason", r.current_priority + " priority · " + r.impact_minutes + " min impact"));
         box.appendChild(item);
       });
@@ -796,9 +976,10 @@
       badges.appendChild(el("span", "badge st-" + r.status.split(" ")[0], r.status));
       top.appendChild(badges);
       item.appendChild(top);
-      var carried = carryLabel(r);
+      var carried = originLabel(r);
       if (carried) item.appendChild(el("span", "badge carry", carried));
       item.appendChild(el("div", "meta", fmtTime(r.created_at) + " | " + r.shift + " shift | " + r.location + " | " + r.impact_minutes + " min"));
+      if (r.status !== "Resolved") { var ageRow = el("div", "meta", ""); ageRow.appendChild(activeAgeSpan(r)); item.appendChild(ageRow); }
       item.appendChild(el("div", "line", "Reported by " + (r.created_by_name ? r.created_by_name + " (" + roleLabel(r.created_by_role) + ")" : "an earlier record (before login)") +
         " · " + fmtTime(r.created_at)));
       item.appendChild(el("div", "desc", r.description || ""));
@@ -807,8 +988,10 @@
         item.appendChild(el("div", "line", "Started by " + (r.started_by_name || "unknown") + " · " + fmtTime(r.started_at)));
       }
       if (closurePending(r)) {
-        item.appendChild(el("span", "pill", "Closure requested by " + (r.closure_requested_by_name || "unknown") +
-          " · " + fmtTime(r.closure_requested_at)));
+        var wait = el("span", "pill wait", "");
+        wait.appendChild(ageSpan("Awaiting confirmation \u00b7 ", r.closure_requested_at));
+        item.appendChild(wait);
+        item.appendChild(el("div", "line", "Closure requested by " + (r.closure_requested_by_name || "unknown") + " \u00b7 " + fmtTime(r.closure_requested_at)));
       }
       if (r.status === "Resolved" && r.resolved_at) {
         item.appendChild(el("div", "line", "Resolved by " + (r.resolved_by_name || "unknown") + " · " + fmtTime(r.resolved_at)));
@@ -839,10 +1022,12 @@
 
     function renderView() {
       updateShiftOptions();
+      renderHandover();
+      document.getElementById("impact-note").hidden = !isManagement();
       var rows = filtered();
       if (isManagement()) {
         var sc = dayScope(), sm = document.getElementById("summary");
-        var carry = rows.filter(function (r) { return carryLabel(r); }).length;
+        var carry = rows.filter(fromEarlierDay).length;
         sm.hidden = false;
         sm.textContent = (sc.mode === "live" ? "Live view: " : sc.mode === "all" ? "All days: " : "Operational Day " + MineShiftClock.labelOfKey(sc.day) + ": ") +
           rows.length + " exception" + (rows.length === 1 ? "" : "s") +
@@ -906,6 +1091,7 @@
       }
       // Left open across a shift change (05:00, 13:00, 21:00 IST): update the clock, the available shifts and the data.
       setInterval(renderClock, 20000);
+      setInterval(refreshAges, 30000);                              // ages move on without rebuilding the list (open forms stay untouched)
       // A shift change must never wipe what someone is typing. While an inline action form (Request closure, Resolve,
       // Decline, Reopen, Change priority, remark) is open, only the clock and the shift choices are updated; the data
       // refresh is kept pending and runs as soon as the form is closed, cancelled or saved.
